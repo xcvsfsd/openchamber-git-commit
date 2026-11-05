@@ -594,13 +594,12 @@ btnCommit.onclick = async () => {
   if (!dir || btnCommit.disabled) return;
   let message = msgEl.value.trim();
   if (!message) {
-    // 空信息点提交：自动触发 AI，生成后需人工确认再点一次
+    // 空信息点提交：自动 AI 生成后直接走提交
     const ok = await aiFill();
     if (!ok) return;
     message = msgEl.value.trim();
     if (!message) return;
-    outEl.textContent = '已自动生成提交信息请确认后再次提交';
-    return;
+    outEl.textContent = `已自动生成：${message}，继续提交…`;
   }
   btnCommit.disabled = true;
   const oldLabel = btnCommit.textContent;
