@@ -28,7 +28,11 @@ td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
 .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%}
 .empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0;opacity:.75}
 .empty .ic{font-size:26px;opacity:.4}
-#done[hidden],#nongit[hidden]{display:none!important}
+#done[hidden],#nongit[hidden],#conflict[hidden]{display:none!important}
+#conflict{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,#7f1d1d 92%,transparent);z-index:20;text-align:center;padding:16px}
+#conflict .big{font-size:44px}
+#conflict table{max-width:100%}
+#conflict td{border-bottom:1px solid #fff3}
 textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
@@ -53,6 +57,13 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 <div id="remote"><div class="mut">—</div></div>
 <h3 id="h-local">本地未提交</h3>
 <div id="local"><div class="mut">—</div></div>
+<div id="conflict" hidden>
+  <div class="big">⛔</div>
+  <div style="font-size:15px;font-weight:700">出现合并冲突请自行处理</div>
+  <div class="mut" style="color:#fecaca">插件不会自动合并以下文件在外部处理完再回来</div>
+  <table id="conflict-list"></table>
+  <button id="btn-conflict-ok">我知道了</button>
+</div>
 <div id="done" hidden>
   <div class="big">🎉</div>
   <div style="font-size:15px">提交成功</div>
@@ -82,6 +93,36 @@ const hLocalEl = $('h-local');
 const nongitEl = $('nongit');
 const commitBoxEl = $('commitBox');
 const doneEl = $('done');
+const conflictEl = $('conflict');
+const conflictListEl = $('conflict-list');
+
+// 冲突文件：U 或双边 AA/DD
+const conflictFiles = (st: StatusAnswer): string[] =>
+  (st.files ?? [])
+    .filter((f) => f.staged === 'U' || f.unstaged === 'U' || (f.staged === 'A' && f.unstaged === 'A') || (f.staged === 'D' && f.unstaged === 'D'))
+    .map((f) => f.path);
+let conflictShownKey = '';
+
+// 全屏提示一次：同批冲突只弹一次，点掉后不再打扰
+const maybeConflict = (st: StatusAnswer): void => {
+  const list = conflictFiles(st);
+  if (list.length === 0) { conflictShownKey = ''; return; }
+  const key = list.join('\n');
+  if (key === conflictShownKey) return;
+  conflictShownKey = key;
+  conflictListEl.innerHTML = '';
+  for (const p of list.slice(0, 20)) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'mono ellipsis';
+    td.textContent = p;
+    tr.appendChild(td);
+    conflictListEl.appendChild(tr);
+  }
+  conflictEl.hidden = false;
+};
+
+
 
 // 非git时整页只留一句提示其余全藏
 const showNongit = (on: boolean): void => {
@@ -239,6 +280,8 @@ const syncAll = async (): Promise<void> => {
     paintBranches(st, d);
     renderRemote(st);
     renderLocal(st);
+    // 冲突只提示不自动合并
+    maybeConflict(st);
   } catch (e) {
     syncEl.textContent = e instanceof HostRequestError ? `${e.code}` : '同步失败';
   } finally {
@@ -255,6 +298,7 @@ const refreshLocal = async (): Promise<void> => {
     const st = JSON.parse(r.body) as StatusAnswer;
     if (!st.ok) return;
     renderLocal(st);
+    maybeConflict(st);
     void host.setBadge(st.files?.length ? st.files.length : null).catch(() => undefined);
   } catch { /* 静默下次再试 */ } finally {
     busy = false;
@@ -386,6 +430,8 @@ const celebrate = (): void => {
     doneEl.appendChild(c);
   }
 };
+
+$('btn-conflict-ok').onclick = () => { conflictEl.hidden = true; };
 
 host.onResolve(async ({ args }) => {
   if (args.trim()) msgEl.value = args.trim();
