@@ -308,8 +308,19 @@ btnCommit.onclick = async () => {
     const r = await call('POST', '/commit', { dir, message, push: true });
     const j = JSON.parse(r.body);
     if (!j.ok) { outEl.textContent = j.error || '提交失败'; return; }
+    // 提交完跟远程再核一次：fetch 后超前为 0 才算真正上去
+    outEl.textContent = '跟远程核验中…';
+    await call('POST', '/fetch', { dir }).catch(() => undefined);
+    const vr = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
+    const vs = JSON.parse(vr.body) as StatusAnswer;
+    const ahead = vs.ahead ?? 0;
+    if (ahead > 0) {
+      outEl.textContent = `已提交但远程核验本地仍超前 ${ahead}推送可能没完全成功请检查`;
+      renderRemote(vs);
+      return;
+    }
     msgEl.value = '';
-    outEl.textContent = '已提交并推送';
+    outEl.textContent = '已提交并推送远程核验一致';
     celebrate();
   } catch (e) {
     outEl.textContent = e instanceof HostRequestError ? `${e.code}` : '提交失败';
