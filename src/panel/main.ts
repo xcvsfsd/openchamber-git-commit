@@ -449,6 +449,9 @@ const paintBranches = (st: StatusAnswer, d: string): void => {
 
 // 当前项目选项用 fetch 后的新鲜数刷新
 const refreshCurrentProjectLabel = (st: StatusAnswer): void => {
+  for (const x of [...projectSel.options]) {
+    if (x.value !== dir) x.textContent = x.textContent.replace(/^\u25cf /, '');
+  }
   const o = [...projectSel.options].find((x) => x.value === dir);
   if (!o) return;
   o.textContent = projectLabel({ name: o.textContent.replace(/^\u25cf /, '').split(' ')[0] ?? '', branch: st.branch ?? undefined, ahead: st.ahead, behind: st.behind, current: true });
