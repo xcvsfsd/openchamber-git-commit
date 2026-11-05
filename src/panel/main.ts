@@ -333,9 +333,12 @@ const renderLocal = (st: StatusAnswer): void => {
       rb.className = 'icon';
       rb.onclick = async () => {
         if (!dir) return;
-        // 新增/未跟踪还原会删文件，先确认
+        // 新增/未跟踪还原=删除文件：双重确认防手滑
         const destructive = f.staged === '?' || f.staged === 'A';
-        if (destructive && !confirm(`确定丢弃 ${f.path} 的本地内容吗？`)) return;
+        if (destructive) {
+          if (!confirm(`确定丢弃 ${f.path} 的本地内容吗？删除后不可恢复`)) return;
+          if (!confirm(`再次确认：真的删除 ${f.path} 吗？`)) return;
+        }
         rb.disabled = true;
         const r = await call('POST', '/restore', { dir, paths: [f.path], confirmed: true });
         const j = JSON.parse(r.body) as { ok: boolean; error?: string };
