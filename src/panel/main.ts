@@ -56,6 +56,7 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 .confetti{position:absolute;top:-8px;width:8px;height:12px;opacity:.9;animation:fall 1.6s ease-in forwards}
 @keyframes fall{to{transform:translateY(220px) rotate(540deg);opacity:0}}
 </style>
+<select id="project" title="项目目录，默认当前项目"></select>
 <div class="top" id="topbar">
   <select id="branch" title="分支，选中直接切换"></select>
   <button id="btn-pull" title="拉取远程代码 git pull">下载</button>
@@ -102,6 +103,7 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 `;
 
 const $ = <T extends HTMLElement>(id: string): T => document.querySelector(`#${id}`) as T;
+const projectSel = $<HTMLSelectElement>('project');
 const branchSel = $<HTMLSelectElement>('branch');
 const syncEl = $('sync');
 const remoteEl = $('remote');
@@ -181,6 +183,23 @@ const call = (method: 'GET' | 'POST', p: string, body?: unknown) =>
 const friendlyErr = (e: string): string => {
   if (/not a git repository|not-a-repo|bad-dir/i.test(e)) return '非git项目';
   return e.slice(0, 60);
+};
+
+// 项目目录：默认当前项目，可切上层目录下其他 git 项目
+const loadProjects = async (ctxDir: string): Promise<void> => {
+  try {
+    const r = await call('GET', `/projects?dir=${encodeURIComponent(ctxDir)}`);
+    const j = JSON.parse(r.body) as { ok: boolean; projects?: { name: string; path: string; current: boolean }[] };
+    if (!j.ok || !j.projects) return;
+    projectSel.innerHTML = '';
+    for (const pr of j.projects) {
+      const o = document.createElement('option');
+      o.value = pr.path;
+      o.textContent = pr.name;
+      if (pr.current) o.selected = true;
+      projectSel.appendChild(o);
+    }
+  } catch { /* 不挡主流程 */ }
 };
 
 const renderBranches = async (d: string, current: string): Promise<void> => {
@@ -597,6 +616,13 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void refreshLocal();
 });
 
+// 项目切换：直接换目标仓库操作
+projectSel.onchange = () => {
+  if (!projectSel.value) return;
+  dir = projectSel.value;
+  void syncAll();
+};
+
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
   const next = ctx.directory ?? null;
@@ -606,6 +632,7 @@ host.onReady((ctx) => {
       showNongit(true);
       return;
     }
+    void loadProjects(dir);
     void syncAll();
   }
 });

@@ -222,6 +222,41 @@ var server = http.createServer((req, res) => {
     })().catch(() => json(res, 500, { ok: false, error: "status-failed" }));
     return;
   }
+  if (req.method === "GET" && url.pathname === "/projects") {
+    const dir = url.searchParams.get("dir") ?? "";
+    if (!isValidDir(dir))
+      return json(res, 400, { ok: false, error: "bad-dir" });
+    (async () => {
+      const out = [];
+      const cur = await runGit(dir, ["rev-parse", "--show-toplevel"]);
+      const top = cur.code === 0 ? cur.stdout.trim() : "";
+      const base = top || dir;
+      out.push({ name: path.basename(base), path: base, current: true });
+      const parent = path.dirname(base);
+      let entries = [];
+      try {
+        entries = fs.readdirSync(parent).slice(0, 200);
+      } catch {
+        return json(res, 200, { ok: true, projects: out });
+      }
+      for (const name of entries) {
+        if (name.startsWith("."))
+          continue;
+        const full = path.join(parent, name);
+        if (full === base)
+          continue;
+        try {
+          if (!fs.statSync(full).isDirectory())
+            continue;
+          fs.statSync(path.join(full, ".git"));
+          out.push({ name, path: full, current: false });
+        } catch {}
+      }
+      out.sort((a, b) => a.current ? -1 : b.current ? 1 : a.name.localeCompare(b.name));
+      json(res, 200, { ok: true, projects: out.slice(0, 100) });
+    })().catch(() => json(res, 500, { ok: false, error: "projects-failed" }));
+    return;
+  }
   if (req.method === "GET" && url.pathname === "/branches") {
     const dir = url.searchParams.get("dir") ?? "";
     if (!isValidDir(dir))

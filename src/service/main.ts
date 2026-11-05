@@ -223,6 +223,39 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ---- 读：同级 git 项目（当前目录的上层目录下含 .git 的项目） ----
+  if (req.method === 'GET' && url.pathname === '/projects') {
+    const dir = url.searchParams.get('dir') ?? '';
+    if (!isValidDir(dir)) return json(res, 400, { ok: false, error: 'bad-dir' });
+    (async () => {
+      const out: { name: string; path: string; current: boolean }[] = [];
+      const cur = await runGit(dir, ['rev-parse', '--show-toplevel']);
+      const top = cur.code === 0 ? cur.stdout.trim() : '';
+      const base = top || dir;
+      out.push({ name: path.basename(base), path: base, current: true });
+      const parent = path.dirname(base);
+      let entries: string[] = [];
+      try {
+        entries = fs.readdirSync(parent).slice(0, 200);
+      } catch {
+        return json(res, 200, { ok: true, projects: out });
+      }
+      for (const name of entries) {
+        if (name.startsWith('.')) continue;
+        const full = path.join(parent, name);
+        if (full === base) continue;
+        try {
+          if (!fs.statSync(full).isDirectory()) continue;
+          fs.statSync(path.join(full, '.git'));
+          out.push({ name, path: full, current: false });
+        } catch { /* 非 git 跳过 */ }
+      }
+      out.sort((a, b) => (a.current ? -1 : b.current ? 1 : a.name.localeCompare(b.name)));
+      json(res, 200, { ok: true, projects: out.slice(0, 100) });
+    })().catch(() => json(res, 500, { ok: false, error: 'projects-failed' }));
+    return;
+  }
+
   // ---- 读：分支 ----
   if (req.method === 'GET' && url.pathname === '/branches') {
     const dir = url.searchParams.get('dir') ?? '';
