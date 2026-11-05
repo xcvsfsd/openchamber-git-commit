@@ -237,14 +237,28 @@ $('btn-ai').onclick = async () => {
   try {
     const r = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
     const st = JSON.parse(r.body) as StatusAnswer;
-    const files = (st.files ?? []).map((f) => `${f.staged}${f.unstaged} ${f.path}`).join('\n').slice(0, 3000);
+    // 只看已勾选 = 已暂存；新增未跟踪文件勾选后即暂存，同样在内
+    const isStaged = (x: string): boolean => x.trim() !== '' && x !== '?' && x !== ' ';
+    const sel = (st.files ?? []).filter((f) => isStaged(f.staged));
+    if (sel.length === 0) { outEl.textContent = '先勾选要提交的文件'; return; }
+    // 附上已暂存 diff，信息更准；最多 3 个文件，共 6000 字
+    let diffs = '';
+    for (const f of sel.slice(0, 3)) {
+      try {
+        const dr = await call('GET', `/diff?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(f.path)}&staged=1`);
+        const dj = JSON.parse(dr.body) as { ok: boolean; diff?: string };
+        if (dj.ok && dj.diff) diffs += `\n--- ${f.path} ---\n${dj.diff.slice(0, 2000)}`;
+      } catch { /* 单个失败跳过 */ }
+      if (diffs.length > 6000) break;
+    }
+    const files = sel.map((f) => `${f.staged}${f.unstaged} ${f.path}`).join('\n').slice(0, 1000);
     const { text } = await host.generate({
       system: '只输出一行 Conventional Commits 短句，无解释。',
-      prompt: `分支 ${st.branch}\n${files}`,
+      prompt: `分支 ${st.branch}\n已选文件：\n${files}${diffs.slice(0, 6000)}`,
       maxOutputTokens: 100,
     });
     msgEl.value = text.trim();
-    outEl.textContent = '';
+    outEl.textContent = `已按 ${sel.length} 个勾选文件生成`;
   } catch {
     outEl.textContent = '无小模型或未授权 model';
   }
