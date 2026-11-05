@@ -1,0 +1,55 @@
+{
+  "name": "openchamber-git-commit",
+  "version": "0.1.0",
+  "description": "JetBrains式Git提交增强：pull/切分支/暂存/提交推送，全走git原生命令",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "openchamber": {
+    "apiVersion": 1,
+    "engines": {
+      "openchamber": ">=2.3.3"
+    },
+    "contributes": {
+      "panel": {
+        "id": "git-commit",
+        "name": "Git 提交",
+        "icon": "git-commit",
+        "entry": "panel/index.html"
+      },
+      "statusSection": {
+        "entry": "status/index.html",
+        "title": "Git",
+        "height": 76
+      },
+      "commands": [
+        {
+          "name": "commit",
+          "description": "生成提交信息并挂到输入框"
+        }
+      ],
+      "capabilities": [
+        "model"
+      ],
+      "service": {
+        "entry": "service/main.js",
+        "runtime": "host",
+        "permissions": {
+          "exec": [
+            "git"
+          ]
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@openchamber/sdk": "^2.3.3",
+    "@types/bun": "^1.4.2",
+    "typescript": "^5.9.2"
+  }
+}
