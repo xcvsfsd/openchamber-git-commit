@@ -592,8 +592,16 @@ branchSel.onchange = async () => {
 const btnCommit = $('btn-commit') as unknown as HTMLButtonElement;
 btnCommit.onclick = async () => {
   if (!dir || btnCommit.disabled) return;
-  const message = msgEl.value.trim();
-  if (!message) { outEl.textContent = '先写提交信息'; return; }
+  let message = msgEl.value.trim();
+  if (!message) {
+    // 空信息点提交：自动触发 AI，生成后需人工确认再点一次
+    const ok = await aiFill();
+    if (!ok) return;
+    message = msgEl.value.trim();
+    if (!message) return;
+    outEl.textContent = '已自动生成提交信息请确认后再次提交';
+    return;
+  }
   btnCommit.disabled = true;
   const oldLabel = btnCommit.textContent;
   btnCommit.innerHTML = '<span class="spin">↻</span> 提交中…';
@@ -636,8 +644,9 @@ btnCommit.onclick = async () => {
   }
 };
 
-$('btn-ai').onclick = async () => {
-  if (!dir) return;
+// AI 按勾选文件生成并填入：返回是否成功
+const aiFill = async (): Promise<boolean> => {
+  if (!dir) return false;
   outEl.textContent = 'AI 生成中…';
   try {
     const r = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
@@ -645,7 +654,7 @@ $('btn-ai').onclick = async () => {
     // 只看已勾选 = 已暂存；新增未跟踪文件勾选后即暂存，同样在内
     const isStaged = (x: string): boolean => x.trim() !== '' && x !== '?' && x !== ' ';
     const sel = (st.files ?? []).filter((f) => isStaged(f.staged));
-    if (sel.length === 0) { outEl.textContent = '先勾选要提交的文件'; return; }
+    if (sel.length === 0) { outEl.textContent = '先勾选要提交的文件'; return false; }
     // 附上已暂存 diff，信息更准；最多 3 个文件，共 6000 字
     let diffs = '';
     for (const f of sel.slice(0, 3)) {
@@ -693,10 +702,13 @@ ${files}${diffs ? `\nDiffs:\n${diffs.slice(0, 6000)}` : ''}`,
       msgEl.value = (cleaned.split('\n')[0] ?? '').slice(0, 200);
       outEl.textContent = `已按 ${sel.length} 个勾选文件生成（原文回填）`;
     }
+    return msgEl.value.trim().length > 0;
   } catch {
     outEl.textContent = '无小模型或未授权 model';
+    return false;
   }
 };
+$('btn-ai').onclick = () => void aiFill();
 
 let doneTimer: ReturnType<typeof setTimeout> | null = null;
 $('btn-again').onclick = () => {
