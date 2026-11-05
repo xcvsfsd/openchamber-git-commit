@@ -32,8 +32,8 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 .err{font-size:12px;color:var(--error,#d33);white-space:pre-wrap}
 </style>
 <div class="top">
-  <select id="branch" title="分支"></select>
-  <button id="btn-sync" title="fetch 并对比远程">同步</button>
+  <select id="branch" title="分支，选中直接切换"></select>
+  <button id="btn-sync" title="拉取远程代码">下载</button>
 </div>
 <div id="sync" class="sync">等待项目…</div>
 <div id="body" style="flex:1;display:flex;flex-direction:column;gap:8px"></div>
@@ -114,9 +114,34 @@ const renderEmpty = (tip: string): void => {
 
 const renderFiles = (st: StatusAnswer): void => {
   bodyEl.innerHTML = '';
+  // 远程新提交：一行一个，先展示
+  const incoming = st.incoming ?? [];
+  if (incoming.length > 0) {
+    const h = document.createElement('div');
+    h.className = 'mut';
+    h.textContent = `远程 ${incoming.length} 个新提交：`;
+    bodyEl.appendChild(h);
+    for (const c of incoming) {
+      const row = document.createElement('div');
+      row.className = 'file';
+      const sp = document.createElement('span');
+      sp.className = 'p';
+      sp.textContent = `${c.sha} ${c.subject}`;
+      sp.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}`;
+      bodyEl.appendChild(row);
+      row.appendChild(sp);
+    }
+  }
   const files = st.files ?? [];
-  if (files.length === 0) {
+  if (files.length === 0 && incoming.length === 0) {
     renderEmpty('来吧，写点代码，改动自然就来了。');
+    return;
+  }
+  if (files.length === 0) {
+    const w = document.createElement('div');
+    w.className = 'empty';
+    w.innerHTML = `<div class="ic">—○—</div><div>工作区干净</div>`;
+    bodyEl.appendChild(w);
     return;
   }
   for (const f of files) {
@@ -143,7 +168,15 @@ const renderFiles = (st: StatusAnswer): void => {
   }
 };
 
-$('btn-sync').onclick = () => void sync();
+// 下载 = 拉取远程代码，原生 git pull，完事自动对比
+$('btn-sync').onclick = async () => {
+  if (!dir) return;
+  syncEl.textContent = '下载中…';
+  try {
+    await call('POST', '/pull', { dir });
+  } catch { /* pull 结果在 sync 里体现 */ }
+  void sync();
+};
 
 // 切分支 = 下拉切换，直接 checkout
 branchSel.onchange = async () => {

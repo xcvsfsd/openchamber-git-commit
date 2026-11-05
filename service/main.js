@@ -155,7 +155,18 @@ var server = http.createServer((req, res) => {
         const [sha = "", subject = "", author = "", date = ""] = l.split("\x1F");
         return { sha: sha.slice(0, 12), subject, author, date };
       }) : [];
-      json(res, 200, { ok: true, dir, ...parsed, recent });
+      let incoming = [];
+      if (parsed.upstream) {
+        const ic = await runGit(dir, ["log", "HEAD..@{u}", "--pretty=format:%H%x1f%s%x1f%an%x1f%ad", "--date=short", "-20"]);
+        if (ic.code === 0) {
+          incoming = ic.stdout.split(`
+`).filter(Boolean).map((l) => {
+            const parts = l.split("\x1F");
+            return { sha: (parts[0] ?? "").slice(0, 12), subject: parts[1] ?? "", author: parts[2] ?? "", date: parts[3] ?? "" };
+          });
+        }
+      }
+      json(res, 200, { ok: true, dir, ...parsed, recent, incoming });
     })().catch(() => json(res, 500, { ok: false, error: "status-failed" }));
     return;
   }
