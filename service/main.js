@@ -209,6 +209,14 @@ var server = http.createServer((req, res) => {
       const out = await runGit(dir, ["branch", "-vv", "--no-color"]);
       if (out.code !== 0)
         return json(res, 200, { ok: false, error: out.stderr.slice(0, 500) });
+      let remotes = [];
+      try {
+        const ro = await runGit(dir, ["branch", "-r", "--no-color"]);
+        if (ro.code === 0) {
+          remotes = ro.stdout.split(`
+`).map((l) => l.trim()).filter((l) => l && !l.includes("->")).map((name) => ({ name }));
+        }
+      } catch {}
       const branches = out.stdout.split(`
 `).filter(Boolean).map((l) => {
         const current = l.startsWith("*");
@@ -225,7 +233,7 @@ var server = http.createServer((req, res) => {
           behind = Number(b[1]);
         return { name, current, upstream: up ? up.split(":")[0] ?? null : null, ahead, behind };
       }).filter((b) => b.name && !b.name.startsWith("("));
-      json(res, 200, { ok: true, branches });
+      json(res, 200, { ok: true, branches, remotes });
     })().catch(() => json(res, 500, { ok: false, error: "branches-failed" }));
     return;
   }

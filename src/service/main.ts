@@ -209,6 +209,17 @@ const server = http.createServer((req, res) => {
     (async () => {
       const out = await runGit(dir, ['branch', '-vv', '--no-color']);
       if (out.code !== 0) return json(res, 200, { ok: false, error: out.stderr.slice(0, 500) });
+      // 远程分支：分组展示用，过滤 origin/HEAD 这类符号引用
+      let remotes: { name: string }[] = [];
+      try {
+        const ro = await runGit(dir, ['branch', '-r', '--no-color']);
+        if (ro.code === 0) {
+          remotes = ro.stdout.split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l && !l.includes('->'))
+            .map((name) => ({ name }));
+        }
+      } catch { /* 本地照常返回 */ }
       const branches = out.stdout.split('\n').filter(Boolean).map((l) => {
         const current = l.startsWith('*');
         const rest = l.slice(2).trim();
@@ -222,7 +233,7 @@ const server = http.createServer((req, res) => {
         if (b) behind = Number(b[1]);
         return { name, current, upstream: up ? up.split(':')[0] ?? null : null, ahead, behind };
       }).filter((b) => b.name && !b.name.startsWith('('));
-      json(res, 200, { ok: true, branches });
+      json(res, 200, { ok: true, branches, remotes });
     })().catch(() => json(res, 500, { ok: false, error: 'branches-failed' }));
     return;
   }

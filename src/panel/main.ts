@@ -93,6 +93,8 @@ const hLocalEl = $('h-local');
 const nongitEl = $('nongit');
 const commitBoxEl = $('commitBox');
 const doneEl = $('done');
+// 远程全名集合：选中远程=本地新建同名跟踪分支
+const remoteNames = new Set<string>();
 const conflictEl = $('conflict');
 const conflictListEl = $('conflict-list');
 
@@ -152,16 +154,32 @@ const friendlyErr = (e: string): string => {
 const renderBranches = async (d: string, current: string): Promise<void> => {
   try {
     const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
-    const bj = JSON.parse(br.body) as { ok: boolean; branches?: BranchEntry[] };
+    const bj = JSON.parse(br.body) as { ok: boolean; branches?: BranchEntry[]; remotes?: { name: string }[] };
     if (!bj.ok || !bj.branches) return;
     if (branchSel.value && branchSel.value === current && branchSel.options.length > 0) return;
+    remoteNames.clear();
+    for (const r of bj.remotes ?? []) remoteNames.add(r.name);
     branchSel.innerHTML = '';
+    const gLocal = document.createElement('optgroup');
+    gLocal.label = '本地分支';
     for (const b of bj.branches) {
       const o = document.createElement('option');
       o.value = b.name;
       o.textContent = b.name;
       if (b.current) o.selected = true;
-      branchSel.appendChild(o);
+      gLocal.appendChild(o);
+    }
+    branchSel.appendChild(gLocal);
+    if (bj.remotes && bj.remotes.length > 0) {
+      const gRemote = document.createElement('optgroup');
+      gRemote.label = '远程分支';
+      for (const r of bj.remotes) {
+        const o = document.createElement('option');
+        o.value = r.name;
+        o.textContent = r.name;
+        gRemote.appendChild(o);
+      }
+      branchSel.appendChild(gRemote);
     }
   } catch { /* 不挡主流程 */ }
 };
@@ -401,8 +419,11 @@ $('btn-pull').onclick = async () => {
 // 切分支 = 下拉选中直接 checkout
 branchSel.onchange = async () => {
   if (!dir || !branchSel.value) return;
-  syncEl.textContent = `切换到 ${branchSel.value}…`;
-  const r = await call('POST', '/checkout', { dir, branch: branchSel.value });
+  const target = branchSel.value;
+  const isRemote = remoteNames.has(target);
+  const short = isRemote ? target.slice(target.indexOf('/') + 1) : target;
+  syncEl.textContent = isRemote ? `新建跟踪分支 ${short}…` : `切换到 ${target}…`;
+  const r = await call('POST', '/checkout', isRemote ? { dir, branch: short, create: true, base: target } : { dir, branch: target });
   const j = JSON.parse(r.body);
   if (!j.ok) syncEl.textContent = j.output || j.error || '切换失败';
   void syncAll();
