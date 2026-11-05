@@ -226,10 +226,12 @@ const renderRemote = (st: StatusAnswer): void => {
     return;
   }
   const t = document.createElement('table');
+  t.style.tableLayout = 'fixed';
   for (const c of top) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.className = 'mono';
+    td.className = 'mono ellipsis';
+    td.style.fontSize = '12px';
     const dl = c.downloaded !== false;
     const dot = document.createElement('span');
     dot.textContent = dl ? '\u25cf ' : '\u25cb ';
