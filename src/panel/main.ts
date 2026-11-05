@@ -106,6 +106,22 @@ const renderRemote = (st: StatusAnswer): void => {
   remoteEl.appendChild(t);
 };
 
+// XY 状态码转中文：M修改 A新增 D删除 R重命名 C复制 T类型变更 U冲突 ?未跟踪
+const flagText = (x: string, y: string): string => {
+  const c = `${x}${y}`;
+  if (c === '??') return '未跟踪';
+  if (x === 'U' || y === 'U') return '冲突';
+  let base = '改动';
+  if (x === 'A' || y === 'A') base = '新增';
+  else if (x === 'D' || y === 'D') base = '删除';
+  else if (x === 'R' || y === 'R') base = '重命名';
+  else if (x === 'C' || y === 'C') base = '复制';
+  else if (x === 'T' || y === 'T') base = '类型变更';
+  else if (x === 'M' || y === 'M') base = '修改';
+  const staged = x !== ' ' && x !== '?' && x !== '!';
+  return staged ? `${base}·已暂存` : base;
+};
+
 // 本地表：未提交文件独立表格勾选暂存
 const renderLocal = (st: StatusAnswer): void => {
   localEl.innerHTML = '';
@@ -137,9 +153,10 @@ const renderLocal = (st: StatusAnswer): void => {
     tdP.textContent = f.path;
     tdP.title = f.path;
     const tdS = document.createElement('td');
-    tdS.style.width = '36px';
-    tdS.className = 'mut mono';
-    tdS.textContent = `${f.staged.trim() || '·'}${f.unstaged.trim() || '·'}`;
+    tdS.style.width = '76px';
+    tdS.style.textAlign = 'right';
+    tdS.className = 'mut';
+    tdS.textContent = flagText(f.staged, f.unstaged);
     tr.append(tdC, tdP, tdS);
     t.appendChild(tr);
   }
