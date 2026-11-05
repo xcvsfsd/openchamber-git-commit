@@ -1,4 +1,4 @@
-// Work Status 区：只显示分支 + 脏数 + 上下游超前落后，保持轻量。
+// Work Status 区：分支 + 脏数 + 上下游；非 git 项目显示中文；点击打开本扩展面板。
 import { connectHost } from '@openchamber/sdk';
 import { applyHostReady } from '@openchamber/sdk/ui';
 import type { StatusAnswer } from '../shared/types.ts';
@@ -8,10 +8,21 @@ const root = document.querySelector<HTMLElement>('#root');
 if (!root) throw new Error('Missing #root');
 root.innerHTML = `<style>
 body{margin:0;font:12px/1.5 system-ui,sans-serif}
-#root{padding:2px 4px}
+#root{padding:2px 4px;cursor:pointer}
 .m{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style><div class="m" id="m">Git: …</div>`;
 const m = document.querySelector('#m') as HTMLElement;
+
+// 点击打开本扩展 Git 提交面板
+root.onclick = () => {
+  void host.openSurface('plugin:git-commit').catch(() => undefined);
+};
+
+// 英文 git 报错转中文，非仓库一律显示非 git 项目
+const errText = (e: string): string => {
+  if (/not a git repository|not-a-repo|bad-dir/i.test(e)) return 'Git: 非git项目';
+  return `Git: ${e.slice(0, 40)}`;
+};
 
 let dir: string | null = null;
 
@@ -20,12 +31,12 @@ const poll = async (): Promise<void> => {
   try {
     const r = await host.serviceRequest({ method: 'GET', path: `/status?dir=${encodeURIComponent(dir)}` });
     const st = JSON.parse(r.body) as StatusAnswer;
-    if (!st.ok) { m.textContent = `Git: ${st.error ?? '不可用'}`; return; }
+    if (!st.ok) { m.textContent = errText(st.error ?? '不可用'); return; }
     m.textContent = `Git: ${st.branch ?? '?'} · ${st.files?.length ?? 0}改 · ↑${st.ahead ?? 0} ↓${st.behind ?? 0}`;
     const h = Math.ceil(root.getBoundingClientRect().height);
     void host.setHeight(h).catch(() => undefined);
   } catch {
-    m.textContent = 'Git: 未授权 service';
+    m.textContent = 'Git: 未启用本地服务';
   }
 };
 
