@@ -24,6 +24,15 @@ button:disabled{opacity:.5}
 h3{margin:6px 0 0;font-size:12px;opacity:.65;font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:12px}
 td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
+input[type=checkbox]{width:19px;height:19px;accent-color:var(--primary,#3574f0);cursor:pointer;flex:none;margin:0}
+.selbar{display:flex;gap:10px;align-items:center;background:#8881;border-radius:8px;padding:7px 10px;cursor:pointer;user-select:none}
+.selbar:hover{background:#8882}
+.selbar span{font-size:12px}
+.file .p{cursor:pointer}
+.file .p:hover{text-decoration:underline}
+button.ai{background:linear-gradient(135deg,#8b5cf6,#3b82f6);border:none;color:#fff;font-weight:700;padding:6px 14px}
+button.ai:hover{filter:brightness(1.12)}
+button.icon{padding:4px 10px;font-size:13px}
 .mono{font-family:monospace}
 .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%}
 .empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0;opacity:.75}
@@ -72,7 +81,7 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 <div id="commitBox">
   <textarea id="msg" placeholder="提交信息，如 feat: xxx"></textarea>
   <div class="row" style="margin-top:8px">
-    <button id="btn-ai" title="AI 生成提交信息">✨</button>
+    <button id="btn-ai" class="ai" title="按勾选文件 AI 生成提交信息">✨ AI 生成</button>
     <span style="flex:1"></span>
     <button id="btn-commit" class="primary">提交并推送</button>
   </div>
@@ -254,7 +263,8 @@ const renderLocal = (st: StatusAnswer): void => {
   const isStaged = (x: string): boolean => x.trim() !== '' && x !== '?' && x !== ' ';
   const allStaged = files.every((f) => isStaged(f.staged));
   const head = document.createElement('div');
-  head.className = 'row';
+  head.className = 'selbar';
+  head.onclick = (e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') allCb.click(); };
   const allCb = document.createElement('input');
   allCb.type = 'checkbox';
   allCb.checked = allStaged;
@@ -294,7 +304,8 @@ const renderLocal = (st: StatusAnswer): void => {
     const tdP = document.createElement('td');
     tdP.className = 'mono ellipsis';
     tdP.textContent = f.path;
-    tdP.title = f.path;
+    tdP.title = `${f.path}（点切换勾选）`;
+    tdP.onclick = () => cb.click();
     const tdS = document.createElement('td');
     tdS.style.width = '92px';
     tdS.style.minWidth = '92px';
@@ -317,9 +328,9 @@ const renderLocal = (st: StatusAnswer): void => {
     const conflicted = f.staged === 'U' || f.unstaged === 'U';
     if (!conflicted) {
       const rb = document.createElement('button');
-      rb.textContent = '↩';
+      rb.textContent = '↩ 还原';
       rb.title = '还原：丢弃该文件本地改动';
-      rb.style.padding = '2px 7px';
+      rb.className = 'icon';
       rb.onclick = async () => {
         if (!dir) return;
         // 新增/未跟踪还原会删文件，先确认
