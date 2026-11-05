@@ -273,8 +273,9 @@ ${wS}`;var V_=QT(),bS=document.querySelector("#root");if(!bS)throw Error("Missin
 body{margin:0;font:13px/1.5 system-ui,sans-serif}
 #root{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:100%}
 .top{display:flex;gap:8px;align-items:center}
-select{flex:1;padding:6px 8px;border:1px solid var(--border,#3333);border-radius:8px;background:inherit;color:inherit}
-button{padding:6px 12px;border:1px solid var(--border,#3333);border-radius:8px;background:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+select{flex:1;padding:6px 8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,#fff);color:var(--oc-fg,inherit);color-scheme:light dark}
+select option{background:var(--oc-elevated,#fff);color:var(--oc-fg,#111)}
+button{padding:6px 12px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);cursor:pointer;white-space:nowrap}
 button.primary{background:var(--primary,#3574f0);border-color:transparent;color:#fff}
 button:disabled{opacity:.5}
 .sync{font-size:12px;opacity:.75}
@@ -282,7 +283,7 @@ button:disabled{opacity:.5}
 .empty .ic{font-size:28px;opacity:.4}
 .file{display:flex;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid #8882;font-family:monospace;font-size:12px}
 .file .p{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--border,#3333);border-radius:8px;background:inherit;color:inherit;resize:vertical}
+textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
 .err{font-size:12px;color:var(--error,#d33);white-space:pre-wrap}
