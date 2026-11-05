@@ -28,6 +28,7 @@ td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
 .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%}
 .empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0;opacity:.75}
 .empty .ic{font-size:26px;opacity:.4}
+#done[hidden],#nongit[hidden]{display:none!important}
 textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
@@ -352,10 +353,16 @@ $('btn-ai').onclick = async () => {
   }
 };
 
-$('btn-again').onclick = () => { doneEl.hidden = true; };
+let doneTimer: ReturnType<typeof setTimeout> | null = null;
+$('btn-again').onclick = () => {
+  if (doneTimer) { clearTimeout(doneTimer); doneTimer = null; }
+  doneEl.hidden = true;
+};
 
 const celebrate = (): void => {
+  if (doneTimer) clearTimeout(doneTimer);
   doneEl.hidden = false;
+  doneTimer = setTimeout(() => { doneEl.hidden = true; doneTimer = null; }, 2200);
   // 撒花：随机色纸片
   doneEl.querySelectorAll('.confetti').forEach((e) => e.remove());
   const colors = ['#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#a855f7'];
