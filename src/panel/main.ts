@@ -202,12 +202,15 @@ const loadProjects = async (ctxDir: string): Promise<void> => {
   } catch { /* 不挡主流程 */ }
 };
 
+let lastBranchSig = '';
 const renderBranches = async (d: string, current: string): Promise<void> => {
   try {
     const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
     const bj = JSON.parse(br.body) as { ok: boolean; branches?: BranchEntry[]; remotes?: { name: string }[] };
     if (!bj.ok || !bj.branches) return;
-    if (branchSel.value && branchSel.value === current && branchSel.options.length > 0) return;
+    const sig = JSON.stringify([current, bj.branches, bj.remotes]);
+    if (sig === lastBranchSig) return;
+    lastBranchSig = sig;
     remoteNames.clear();
     for (const r of bj.remotes ?? []) remoteNames.add(r.name);
     branchSel.innerHTML = '';
@@ -216,7 +219,8 @@ const renderBranches = async (d: string, current: string): Promise<void> => {
     for (const b of bj.branches) {
       const o = document.createElement('option');
       o.value = b.name;
-      o.textContent = b.name;
+      // 当前 ● 标记；未拉取 ↓N、超前 ↑N
+      o.textContent = `${b.current ? '\u25cf ' : ''}${b.name}${(b.behind ?? 0) > 0 ? ` \u2193${b.behind}` : ''}${!(b.current) && (b.ahead ?? 0) > 0 ? ` \u2191${b.ahead}` : ''}`;
       if (b.current) o.selected = true;
       gLocal.appendChild(o);
     }
