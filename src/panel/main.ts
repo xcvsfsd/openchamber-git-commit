@@ -193,6 +193,9 @@ const showNongit = (on: boolean): void => {
 
 let dir: string | null = null;
 let busy = false;
+// 会话项目（左侧聊天所在仓）与面板当前操作仓是两个概念，分开标
+let sessionPath: string | null = null;
+const projMeta = new Map<string, { name: string; branch?: string; ahead?: number; behind?: number }>();
 
 const call = (method: 'GET' | 'POST', p: string, body?: unknown) =>
   host.serviceRequest({ method, path: p, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -205,28 +208,33 @@ const friendlyErr = (e: string): string => {
 };
 
 // 项目目录：默认当前项目，可切上层目录下其他 git 项目
+// ● = 面板当前操作仓，（会话）= 左侧聊天所在仓
 const loadProjects = async (ctxDir: string): Promise<void> => {
   try {
     const r = await call('GET', `/projects?dir=${encodeURIComponent(ctxDir)}`);
     const j = JSON.parse(r.body) as { ok: boolean; projects?: { name: string; path: string; current: boolean; branch?: string; ahead?: number; behind?: number; dirty?: number }[] };
     if (!j.ok || !j.projects) return;
+    projMeta.clear();
     projectSel.innerHTML = '';
     for (const pr of j.projects) {
+      projMeta.set(pr.path, { name: pr.name, branch: pr.branch, ahead: pr.ahead, behind: pr.behind });
       const o = document.createElement('option');
       o.value = pr.path;
-      o.textContent = projectLabel(pr);
-      if (pr.current) o.selected = true;
+      o.textContent = projectLabel(pr.name, pr.path, pr.branch, pr.ahead, pr.behind);
+      if (pr.path === dir) o.selected = true;
       projectSel.appendChild(o);
     }
   } catch { /* 不挡主流程 */ }
 };
 
 let lastBranchSig = '';
-// 项目选项：● 当前 + 分支 + 未拉取↓/超前↑
-const projectLabel = (pr: { name: string; branch?: string; ahead?: number; behind?: number; current?: boolean }): string => {
-  const behind = pr.behind ?? 0;
-  const ahead = pr.ahead ?? 0;
-  return `${pr.current ? '\u25cf ' : ''}${pr.name}${pr.branch ? ` ${pr.branch}` : ''}${behind > 0 ? ` \u2193${behind}` : ''}${ahead > 0 ? ` \u2191${ahead}` : ''}`;
+// 项目选项：● = 面板操作仓，（会话）= 聊天所在仓，↓未拉取 ↑超前
+const projectLabel = (name: string, path: string, branch?: string, ahead?: number, behind?: number): string => {
+  const b = behind ?? 0;
+  const a = ahead ?? 0;
+  const operated = dir !== null && path === dir;
+  const isSession = sessionPath !== null && path === sessionPath;
+  return `${operated ? '\u25cf ' : ''}${name}${branch ? ` ${branch}` : ''}${b > 0 ? ` \u2193${b}` : ''}${a > 0 ? ` \u2191${a}` : ''}${isSession ? '（会话）' : ''}`;
 };
 
 const renderBranches = async (d: string, current: string): Promise<void> => {
@@ -450,14 +458,18 @@ const paintBranches = (st: StatusAnswer, d: string): void => {
   void renderBranches(d, st.branch ?? '');
 };
 
-// 当前项目选项用 fetch 后的新鲜数刷新
+// 当前操作仓用 fetch 后的新鲜数刷新；会话标记保留
 const refreshCurrentProjectLabel = (st: StatusAnswer): void => {
   for (const x of [...projectSel.options]) {
-    if (x.value !== dir) x.textContent = x.textContent.replace(/^\u25cf /, '');
+    const meta = projMeta.get(x.value);
+    if (!meta) continue;
+    if (x.value === dir) {
+      meta.branch = st.branch ?? meta.branch;
+      meta.ahead = st.ahead;
+      meta.behind = st.behind;
+    }
+    x.textContent = projectLabel(meta.name, x.value, meta.branch, meta.ahead, meta.behind);
   }
-  const o = [...projectSel.options].find((x) => x.value === dir);
-  if (!o) return;
-  o.textContent = projectLabel({ name: o.textContent.replace(/^\u25cf /, '').split(' ')[0] ?? '', branch: st.branch ?? undefined, ahead: st.ahead, behind: st.behind, current: true });
 };
 
 const paintText = (st: StatusAnswer): void => {
@@ -702,6 +714,7 @@ host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
   const next = ctx.directory ?? null;
   if (next !== dir) {
+    sessionPath = next;
     dir = next;
     if (!dir) {
       showNongit(true);
