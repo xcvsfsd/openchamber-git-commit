@@ -68,6 +68,12 @@ const call = (method: 'GET' | 'POST', p: string, body?: unknown) =>
   host.serviceRequest({ method, path: p, body: body === undefined ? undefined : JSON.stringify(body) });
 
 // 分支下拉只在进入/切换后重建，避免打断选择
+// 英文 git 报错转中文，非仓库一律显示非git项目
+const friendlyErr = (e: string): string => {
+  if (/not a git repository|not-a-repo|bad-dir/i.test(e)) return '非git项目';
+  return e.slice(0, 60);
+};
+
 const renderBranches = async (d: string, current: string): Promise<void> => {
   try {
     const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
@@ -190,7 +196,16 @@ const syncAll = async (): Promise<void> => {
     await call('POST', '/fetch', { dir: d }).catch(() => undefined);
     const r = await call('GET', `/status?dir=${encodeURIComponent(d)}`);
     const st = JSON.parse(r.body) as StatusAnswer;
-    if (!st.ok || st.branch === undefined) { syncEl.textContent = st.error ?? '不是 git 仓库'; return; }
+    if (!st.ok || st.branch === undefined) {
+      syncEl.textContent = friendlyErr(st.error ?? '非git项目');
+      remoteEl.innerHTML = '<div class="mut">—</div>';
+      localEl.innerHTML = '';
+      const w = document.createElement('div');
+      w.className = 'empty';
+      w.innerHTML = '<div class="ic">—○—</div><div>非git项目</div><div class="mut">先打开一个 git 仓库项目</div>';
+      localEl.appendChild(w);
+      return;
+    }
     paintText(st);
     paintBranches(st, d);
     renderRemote(st);
