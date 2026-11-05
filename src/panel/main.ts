@@ -153,8 +153,11 @@ const renderLocal = (st: StatusAnswer): void => {
     tdP.textContent = f.path;
     tdP.title = f.path;
     const tdS = document.createElement('td');
-    tdS.style.width = '76px';
+    tdS.style.width = '92px';
+    tdS.style.minWidth = '92px';
     tdS.style.textAlign = 'right';
+    tdS.style.whiteSpace = 'nowrap';
+    tdS.style.fontSize = '11px';
     tdS.className = 'mut';
     tdS.textContent = flagText(f.staged, f.unstaged);
     tr.append(tdC, tdP, tdS);
