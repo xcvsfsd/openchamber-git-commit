@@ -32,7 +32,8 @@ const poll = async (): Promise<void> => {
     const r = await host.serviceRequest({ method: 'GET', path: `/status?dir=${encodeURIComponent(dir)}` });
     const st = JSON.parse(r.body) as StatusAnswer;
     if (!st.ok) { m.textContent = errText(st.error ?? '不可用'); return; }
-    m.textContent = `Git: ${st.branch ?? '?'} · ${st.files?.length ?? 0}改 · ↑${st.ahead ?? 0} ↓${st.behind ?? 0}`;
+    const proj = (dir?.split('/').pop() ?? '').trim();
+    m.textContent = `Git: ${proj ? `${proj} ` : ''}${st.branch ?? '?'} · ${st.files?.length ?? 0}改 · ↑${st.ahead ?? 0} ↓${st.behind ?? 0}`;
     const h = Math.ceil(root.getBoundingClientRect().height);
     void host.setHeight(h).catch(() => undefined);
   } catch {

@@ -58,6 +58,7 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 </style>
 <select id="project" title="项目目录，默认当前项目"></select>
 <div class="top" id="topbar">
+  <span id="proj-name" class="mut" title="当前项目"></span>
   <select id="branch" title="分支，选中直接切换"></select>
   <button id="btn-pull" title="拉取远程代码 git pull">下载</button>
   <button id="btn-refresh" title="重新对比远程与本地">↻</button>
@@ -111,6 +112,17 @@ const localEl = $('local');
 const msgEl = $('msg') as unknown as HTMLTextAreaElement;
 const outEl = $('out');
 const topbarEl = $('topbar');
+const projNameEl = $('proj-name');
+// 分支前显示项目名
+const paintProjName = (): void => {
+  const p = (dir ?? '').split('/').filter(Boolean).pop() ?? '';
+  projNameEl.textContent = p;
+  projNameEl.style.maxWidth = '120px';
+  projNameEl.style.overflow = 'hidden';
+  projNameEl.style.textOverflow = 'ellipsis';
+  projNameEl.style.whiteSpace = 'nowrap';
+  projNameEl.style.flex = 'none';
+};
 const hRemoteEl = $('h-remote');
 const hLocalEl = $('h-local');
 const nongitEl = $('nongit');
@@ -639,6 +651,7 @@ document.addEventListener('visibilitychange', () => {
 projectSel.onchange = () => {
   if (!projectSel.value) return;
   dir = projectSel.value;
+  paintProjName();
   void syncAll();
 };
 
@@ -652,6 +665,7 @@ host.onReady((ctx) => {
       return;
     }
     void loadProjects(dir);
+    paintProjName();
     void syncAll();
   }
 });
