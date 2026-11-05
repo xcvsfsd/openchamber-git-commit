@@ -336,6 +336,12 @@ const server = http.createServer((req, res) => {
             .map((name) => ({ name }));
         }
       } catch { /* 本地照常返回 */ }
+      // 当前分支的未提交文件数（仅当前分支有工作区）
+      let dirty = 0;
+      try {
+        const stc = await runGit(dir, ['status', '--porcelain=v1']);
+        if (stc.code === 0) dirty = stc.stdout.split('\n').filter((l) => l.trim()).length;
+      } catch { /* 忽略 */ }
       const branches = out.stdout.split('\n').filter(Boolean).map((l) => {
         const current = l.startsWith('*');
         const rest = l.slice(2).trim();
@@ -347,7 +353,7 @@ const server = http.createServer((req, res) => {
         const b = up?.match(/behind (\d+)/);
         if (a) ahead = Number(a[1]);
         if (b) behind = Number(b[1]);
-        return { name, current, upstream: up ? up.split(':')[0] ?? null : null, ahead, behind };
+        return { name, current, upstream: up ? up.split(':')[0] ?? null : null, ahead, behind, dirty: current ? dirty : 0 };
       }).filter((b) => b.name && !b.name.startsWith('('));
       json(res, 200, { ok: true, branches, remotes });
     })().catch(() => json(res, 500, { ok: false, error: 'branches-failed' }));

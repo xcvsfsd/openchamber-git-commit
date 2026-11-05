@@ -255,8 +255,9 @@ const renderBranches = async (d: string, current: string): Promise<void> => {
     for (const b of bj.branches) {
       const o = document.createElement('option');
       o.value = b.name;
-      // 当前 ● 标记；未拉取 ↓N、超前 ↑N
-      o.textContent = `${b.current ? '\u25cf ' : ''}${b.name}${(b.behind ?? 0) > 0 ? ` \u2193${b.behind}` : ''}${!(b.current) && (b.ahead ?? 0) > 0 ? ` \u2191${b.ahead}` : ''}`;
+      // 当前 ● 标记；↓ = 未拉取，↑ = 未提交文件数（仅当前分支）
+      const dirtyN = (b as BranchEntry & { dirty?: number }).dirty ?? 0;
+      o.textContent = `${b.current ? '\u25cf ' : ''}${b.name}${(b.behind ?? 0) > 0 ? ` \u2193${b.behind}` : ''}${b.current && dirtyN > 0 ? ` \u2191${dirtyN}` : ''}`;
       if (b.current) o.selected = true;
       gLocal.appendChild(o);
     }

@@ -331,6 +331,13 @@ var server = http.createServer((req, res) => {
 `).map((l) => l.trim()).filter((l) => l && !l.includes("->")).map((name) => ({ name }));
         }
       } catch {}
+      let dirty = 0;
+      try {
+        const stc = await runGit(dir, ["status", "--porcelain=v1"]);
+        if (stc.code === 0)
+          dirty = stc.stdout.split(`
+`).filter((l) => l.trim()).length;
+      } catch {}
       const branches = out.stdout.split(`
 `).filter(Boolean).map((l) => {
         const current = l.startsWith("*");
@@ -345,7 +352,7 @@ var server = http.createServer((req, res) => {
           ahead = Number(a[1]);
         if (b)
           behind = Number(b[1]);
-        return { name, current, upstream: up ? up.split(":")[0] ?? null : null, ahead, behind };
+        return { name, current, upstream: up ? up.split(":")[0] ?? null : null, ahead, behind, dirty: current ? dirty : 0 };
       }).filter((b) => b.name && !b.name.startsWith("("));
       json(res, 200, { ok: true, branches, remotes });
     })().catch(() => json(res, 500, { ok: false, error: "branches-failed" }));
