@@ -13,6 +13,7 @@ export type RecentCommit = {
   subject: string;
   author: string;
   date: string;
+  downloaded?: boolean;
 };
 
 export type StatusAnswer = {
@@ -25,6 +26,7 @@ export type StatusAnswer = {
   files?: FileEntry[];
   recent?: RecentCommit[];
   incoming?: RecentCommit[];
+  remoteLog?: RecentCommit[];
   error?: string;
 };
 

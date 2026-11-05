@@ -198,7 +198,27 @@ const server = http.createServer((req, res) => {
           (f as { add?: number; del?: number; binary?: boolean }).binary = v.binary;
         }
       }
-      json(res, 200, { ok: true, dir, ...parsed, recent, incoming });
+      // 远程前 5 条：逐个判是否已在本地（已下载）还是未下载
+      let remoteLog: { sha: string; subject: string; author: string; date: string; downloaded: boolean }[] = [];
+      if (parsed.upstream) {
+        const rl = await runGit(dir, ['log', parsed.upstream, '--pretty=format:%H%x1f%s%x1f%an%x1f%ad', '--date=short', '-5']);
+        if (rl.code === 0) {
+          for (const line of rl.stdout.split('\n').filter(Boolean)) {
+            const parts = line.split('\x1f');
+            const full = (parts[0] ?? '').trim();
+            if (!full) continue;
+            const anc = await runGit(dir, ['merge-base', '--is-ancestor', full, 'HEAD']);
+            remoteLog.push({
+              sha: full.slice(0, 12),
+              subject: parts[1] ?? '',
+              author: parts[2] ?? '',
+              date: parts[3] ?? '',
+              downloaded: anc.code === 0,
+            });
+          }
+        }
+      }
+      json(res, 200, { ok: true, dir, ...parsed, recent, incoming, remoteLog });
     })().catch(() => json(res, 500, { ok: false, error: 'status-failed' }));
     return;
   }

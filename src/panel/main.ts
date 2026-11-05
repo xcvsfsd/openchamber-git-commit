@@ -216,21 +216,33 @@ const renderBranches = async (d: string, current: string): Promise<void> => {
   } catch { /* 不挡主流程 */ }
 };
 
-// 远程表：一行一个提交
+// 远程固定展示前 5 条：含时间/作者/内容；未下载 amber，已下载弱化
 const renderRemote = (st: StatusAnswer): void => {
   remoteEl.innerHTML = '';
-  const incoming = st.incoming ?? [];
-  if (incoming.length === 0) {
-    remoteEl.innerHTML = '<div class="mut">无，远程与本地一致</div>';
+  const list = st.remoteLog ?? [];
+  const top = list.slice(0, 5);
+  if (top.length === 0) {
+    remoteEl.innerHTML = '<div class="mut">无远程分支记录</div>';
     return;
   }
   const t = document.createElement('table');
-  for (const c of incoming) {
+  for (const c of top) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.className = 'mono ellipsis';
-    td.textContent = `${c.sha} ${c.subject}`;
-    td.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}`;
+    td.className = 'mono';
+    const dl = c.downloaded !== false;
+    const dot = document.createElement('span');
+    dot.textContent = dl ? '\u25cf ' : '\u25cb ';
+    dot.style.color = dl ? C.green : C.amber;
+    const meta = document.createElement('span');
+    meta.className = 'mut';
+    meta.textContent = `${c.date} ${c.author} `;
+    const body = document.createElement('span');
+    body.textContent = `${c.sha} ${c.subject}`;
+    body.style.color = dl ? C.gray : 'inherit';
+    if (!dl) body.style.fontWeight = '700';
+    td.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}（${dl ? '已下载' : '未下载'}）`;
+    td.append(dot, meta, body);
     tr.appendChild(td);
     t.appendChild(tr);
   }

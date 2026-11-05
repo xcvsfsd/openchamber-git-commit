@@ -197,7 +197,28 @@ var server = http.createServer((req, res) => {
           f.binary = v.binary;
         }
       }
-      json(res, 200, { ok: true, dir, ...parsed, recent, incoming });
+      let remoteLog = [];
+      if (parsed.upstream) {
+        const rl = await runGit(dir, ["log", parsed.upstream, "--pretty=format:%H%x1f%s%x1f%an%x1f%ad", "--date=short", "-5"]);
+        if (rl.code === 0) {
+          for (const line of rl.stdout.split(`
+`).filter(Boolean)) {
+            const parts = line.split("\x1F");
+            const full = (parts[0] ?? "").trim();
+            if (!full)
+              continue;
+            const anc = await runGit(dir, ["merge-base", "--is-ancestor", full, "HEAD"]);
+            remoteLog.push({
+              sha: full.slice(0, 12),
+              subject: parts[1] ?? "",
+              author: parts[2] ?? "",
+              date: parts[3] ?? "",
+              downloaded: anc.code === 0
+            });
+          }
+        }
+      }
+      json(res, 200, { ok: true, dir, ...parsed, recent, incoming, remoteLog });
     })().catch(() => json(res, 500, { ok: false, error: "status-failed" }));
     return;
   }
