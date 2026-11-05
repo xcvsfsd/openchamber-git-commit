@@ -20,7 +20,7 @@ Git commit panel for OpenChamber in the style of JetBrains: branches, pull/push,
 OpenChamber → 设置 → 扩展 → 粘贴 Git 地址添加：
 
 ```text
-https://github.com/liaozs/openchamber-git-commit
+https://github.com/xcvsfsd/openchamber-git-commit
 ```
 
 批准 `service(git)` + `model` 能力，点 rail 上 Git 提交图标。
