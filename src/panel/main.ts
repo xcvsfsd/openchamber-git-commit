@@ -31,6 +31,13 @@ td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
 textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
+.spin{display:inline-block;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+#done{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--oc-elevated,#000) 88%,transparent);z-index:10;text-align:center}
+#done .big{font-size:52px;animation:pop .45s ease-out}
+@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+.confetti{position:absolute;top:-8px;width:8px;height:12px;opacity:.9;animation:fall 1.6s ease-in forwards}
+@keyframes fall{to{transform:translateY(220px) rotate(540deg);opacity:0}}
 </style>
 <div class="top" id="topbar">
   <select id="branch" title="分支，选中直接切换"></select>
@@ -45,6 +52,11 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 <div id="remote"><div class="mut">—</div></div>
 <h3 id="h-local">本地未提交</h3>
 <div id="local"><div class="mut">—</div></div>
+<div id="done" hidden>
+  <div class="big">🎉</div>
+  <div style="font-size:15px">提交成功</div>
+  <button id="btn-again">继续</button>
+</div>
 <div id="commitBox">
   <textarea id="msg" placeholder="提交信息，如 feat: xxx"></textarea>
   <div class="row" style="margin-top:8px">
@@ -68,6 +80,7 @@ const hRemoteEl = $('h-remote');
 const hLocalEl = $('h-local');
 const nongitEl = $('nongit');
 const commitBoxEl = $('commitBox');
+const doneEl = $('done');
 
 // 非git时整页只留一句提示其余全藏
 const showNongit = (on: boolean): void => {
@@ -269,16 +282,41 @@ branchSel.onchange = async () => {
   void syncAll();
 };
 
-$('btn-commit').onclick = async () => {
-  if (!dir) return;
+// 提交前先 fetch 查远程：有更新就拦下人工下载后再点；按钮禁用转圈；成功撒花
+const btnCommit = $('btn-commit') as unknown as HTMLButtonElement;
+btnCommit.onclick = async () => {
+  if (!dir || btnCommit.disabled) return;
   const message = msgEl.value.trim();
   if (!message) { outEl.textContent = '先写提交信息'; return; }
-  outEl.textContent = '提交…';
-  const r = await call('POST', '/commit', { dir, message, push: true });
-  const j = JSON.parse(r.body);
-  outEl.textContent = j.ok ? '已提交并推送' : (j.error || '提交失败');
-  if (j.ok) msgEl.value = '';
-  void syncAll();
+  btnCommit.disabled = true;
+  const oldLabel = btnCommit.textContent;
+  btnCommit.innerHTML = '<span class="spin">↻</span> 提交中…';
+  try {
+    // 先更新再提交
+    await call('POST', '/fetch', { dir }).catch(() => undefined);
+    const chk = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
+    const st = JSON.parse(chk.body) as StatusAnswer;
+    const behind = st.behind ?? 0;
+    if (behind > 0) {
+      outEl.textContent = `远程有 ${behind} 个新提交，先点下载合并后再提交`;
+      syncEl.textContent = `远程有 ${behind} 个新提交可下载`;
+      renderRemote(st);
+      return;
+    }
+    outEl.textContent = '提交…';
+    const r = await call('POST', '/commit', { dir, message, push: true });
+    const j = JSON.parse(r.body);
+    if (!j.ok) { outEl.textContent = j.error || '提交失败'; return; }
+    msgEl.value = '';
+    outEl.textContent = '已提交并推送';
+    celebrate();
+  } catch (e) {
+    outEl.textContent = e instanceof HostRequestError ? `${e.code}` : '提交失败';
+  } finally {
+    btnCommit.disabled = false;
+    btnCommit.textContent = oldLabel;
+    void syncAll();
+  }
 };
 
 $('btn-ai').onclick = async () => {
@@ -311,6 +349,23 @@ $('btn-ai').onclick = async () => {
     outEl.textContent = `已按 ${sel.length} 个勾选文件生成`;
   } catch {
     outEl.textContent = '无小模型或未授权 model';
+  }
+};
+
+$('btn-again').onclick = () => { doneEl.hidden = true; };
+
+const celebrate = (): void => {
+  doneEl.hidden = false;
+  // 撒花：随机色纸片
+  doneEl.querySelectorAll('.confetti').forEach((e) => e.remove());
+  const colors = ['#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#a855f7'];
+  for (let i = 0; i < 24; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = `${4 + Math.random() * 92}%`;
+    c.style.background = colors[i % colors.length] as string;
+    c.style.animationDelay = `${Math.random() * 0.5}s`;
+    doneEl.appendChild(c);
   }
 };
 
