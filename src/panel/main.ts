@@ -214,6 +214,31 @@ const renderLocal = (st: StatusAnswer): void => {
     localEl.appendChild(w);
     return;
   }
+  const isStaged = (x: string): boolean => x.trim() !== '' && x !== '?' && x !== ' ';
+  const allStaged = files.every((f) => isStaged(f.staged));
+  const head = document.createElement('div');
+  head.className = 'row';
+  const allCb = document.createElement('input');
+  allCb.type = 'checkbox';
+  allCb.checked = allStaged;
+  allCb.title = allStaged ? '全不选：取消全部暂存' : '全选：暂存全部';
+  allCb.onchange = async () => {
+    if (!dir) { allCb.checked = !allCb.checked; return; }
+    if (allCb.checked) {
+      const paths = files.filter((f) => !isStaged(f.staged)).map((f) => f.path);
+      if (paths.length > 0) await call('POST', '/stage', { dir, paths });
+    } else {
+      const paths = files.filter((f) => isStaged(f.staged)).map((f) => f.path);
+      if (paths.length > 0) await call('POST', '/unstage', { dir, paths });
+    }
+    void refreshLocal();
+  };
+  const allLb = document.createElement('span');
+  allLb.className = 'mut';
+  const stagedCount = files.filter((f) => isStaged(f.staged)).length;
+  allLb.textContent = `全选 ${stagedCount}/${files.length}`;
+  head.append(allCb, allLb);
+  localEl.appendChild(head);
   const t = document.createElement('table');
   for (const f of files) {
     const tr = document.createElement('tr');
@@ -240,7 +265,9 @@ const renderLocal = (st: StatusAnswer): void => {
     tdS.style.whiteSpace = 'nowrap';
     tdS.style.fontSize = '11px';
     tdS.className = 'mut';
-    tdS.textContent = flagText(f.staged, f.unstaged);
+    const stat = f.binary ? '二进制' : (f.add !== undefined ? `+${f.add} -${f.del ?? 0} ` : '') + flagText(f.staged, f.unstaged);
+    tdS.textContent = stat;
+    tdS.title = stat;
     const tdR = document.createElement('td');
     tdR.style.width = '30px';
     tdR.style.textAlign = 'right';

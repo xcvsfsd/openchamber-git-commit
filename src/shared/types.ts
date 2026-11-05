@@ -3,6 +3,9 @@ export type FileEntry = {
   path: string;
   staged: string;
   unstaged: string;
+  add?: number;
+  del?: number;
+  binary?: boolean;
 };
 
 export type RecentCommit = {

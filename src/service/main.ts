@@ -168,6 +168,35 @@ const server = http.createServer((req, res) => {
           });
         }
       }
+      // 行数：未暂存 + 已暂存 numstat 相加，未跟踪/二进制特殊标
+      const numMap = new Map<string, { add: number; del: number; binary: boolean }>();
+      const numstat = async (args: string[]): Promise<void> => {
+        const n = await runGit(dir, args);
+        if (n.code !== 0) return;
+        for (const line of n.stdout.split('\n')) {
+          const m = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+          if (!m) continue;
+          const key = (m[3] ?? '').trim();
+          const cur = numMap.get(key) ?? { add: 0, del: 0, binary: false };
+          if (m[1] === '-' || m[2] === '-') {
+            cur.binary = true;
+          } else {
+            cur.add += Number(m[1]);
+            cur.del += Number(m[2]);
+          }
+          numMap.set(key, cur);
+        }
+      };
+      await numstat(['diff', '--numstat', '--']);
+      await numstat(['diff', '--cached', '--numstat', '--']);
+      for (const f of parsed.files) {
+        const v = numMap.get(f.path);
+        if (v) {
+          (f as { add?: number; del?: number; binary?: boolean }).add = v.add;
+          (f as { add?: number; del?: number; binary?: boolean }).del = v.del;
+          (f as { add?: number; del?: number; binary?: boolean }).binary = v.binary;
+        }
+      }
       json(res, 200, { ok: true, dir, ...parsed, recent, incoming });
     })().catch(() => json(res, 500, { ok: false, error: 'status-failed' }));
     return;
