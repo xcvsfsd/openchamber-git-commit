@@ -126,6 +126,31 @@ var parsePorcelain = (out) => {
   }
   return { branch, upstream, ahead, behind, files };
 };
+var siblingRepos = (base) => {
+  const repos = [{ name: path.basename(base), path: base }];
+  const parent = path.dirname(base);
+  let entries = [];
+  try {
+    entries = fs.readdirSync(parent).slice(0, 200);
+  } catch {
+    return repos;
+  }
+  for (const name of entries) {
+    if (name.startsWith("."))
+      continue;
+    const full = path.join(parent, name);
+    if (full === base)
+      continue;
+    try {
+      if (!fs.statSync(full).isDirectory())
+        continue;
+      fs.statSync(path.join(full, ".git"));
+      repos.push({ name, path: full });
+    } catch {}
+  }
+  return repos.slice(0, 100);
+};
+var pullJobs = new Map;
 var server = http.createServer((req, res) => {
   if (req.headers.authorization !== `Bearer ${token}`) {
     json(res, 401, { ok: false, error: "unauthorized" });
@@ -279,6 +304,17 @@ var server = http.createServer((req, res) => {
     })().catch(() => json(res, 500, { ok: false, error: "projects-failed" }));
     return;
   }
+  if (req.method === "GET" && url.pathname === "/pull-all-status") {
+    const job = pullJobs.get(url.searchParams.get("jobId") ?? "");
+    if (!job)
+      return json(res, 404, { ok: false, error: "no-job" });
+    const now = Date.now();
+    for (const [id, j] of pullJobs) {
+      if (j.done && now - j.startedAt > 10 * 60 * 1000)
+        pullJobs.delete(id);
+    }
+    return json(res, 200, { ok: true, total: job.total, finished: job.finished, done: job.done, results: job.results });
+  }
   if (req.method === "GET" && url.pathname === "/branches") {
     const dir = url.searchParams.get("dir") ?? "";
     if (!isValidDir(dir))
@@ -374,6 +410,37 @@ var server = http.createServer((req, res) => {
         }
         const r = await runGit(dir, args);
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 2000) });
+      }
+      if (url.pathname === "/pull-all") {
+        const cur = await runGit(dir, ["rev-parse", "--show-toplevel"]);
+        const base = cur.code === 0 && cur.stdout.trim() ? cur.stdout.trim() : dir;
+        const repos = siblingRepos(base);
+        const jobId = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+        const job = { total: repos.length, finished: 0, done: false, startedAt: Date.now(), results: [] };
+        pullJobs.set(jobId, job);
+        if (pullJobs.size > 10) {
+          const first = pullJobs.keys().next().value;
+          if (first)
+            pullJobs.delete(first);
+        }
+        (async () => {
+          for (const repo of repos) {
+            const r = await runGit(repo.path, ["pull"]);
+            const output = (r.stdout + r.stderr).slice(0, 800);
+            job.results.push({
+              name: repo.name,
+              path: repo.path,
+              ok: r.code === 0,
+              conflict: /CONFLICT|fix conflicts|Merge conflict/i.test(output),
+              output
+            });
+            job.finished += 1;
+          }
+          job.done = true;
+        })().catch(() => {
+          job.done = true;
+        });
+        return json(res, 200, { ok: true, jobId, total: repos.length });
       }
       if (url.pathname === "/pull") {
         const r = await runGit(dir, ["pull"]);

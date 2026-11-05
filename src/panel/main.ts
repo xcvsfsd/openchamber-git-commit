@@ -56,7 +56,10 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 .confetti{position:absolute;top:-8px;width:8px;height:12px;opacity:.9;animation:fall 1.6s ease-in forwards}
 @keyframes fall{to{transform:translateY(220px) rotate(540deg);opacity:0}}
 </style>
-<select id="project" title="项目目录，默认当前项目"></select>
+<div class="top">
+  <select id="project" title="项目目录，默认当前项目"></select>
+  <button id="btn-pull-all" title="逐个拉取上层目录下全部 git 项目">全部拉取</button>
+</div>
 <div class="top" id="topbar">
   <span id="proj-name" class="mut" title="当前项目"></span>
   <select id="branch" title="分支，选中直接切换"></select>
@@ -112,6 +115,7 @@ const localEl = $('local');
 const msgEl = $('msg') as unknown as HTMLTextAreaElement;
 const outEl = $('out');
 const topbarEl = $('topbar');
+const btnPullAllEl = $('btn-pull-all') as unknown as HTMLButtonElement;
 const projNameEl = $('proj-name');
 // 分支前显示项目名
 const paintProjName = (): void => {
@@ -506,6 +510,39 @@ const refreshLocal = async (): Promise<void> => {
 };
 
 $('btn-refresh').onclick = () => void syncAll();
+
+// 全部拉取：后台逐个 pull，2 秒轮询进度
+$('btn-pull-all').onclick = async () => {
+  if (!dir || btnPullAllEl.disabled) return;
+  btnPullAllEl.disabled = true;
+  try {
+    const start = await call('POST', '/pull-all', { dir });
+    const sj = JSON.parse(start.body) as { ok: boolean; jobId?: string; total?: number };
+    if (!sj.ok || !sj.jobId) { syncEl.textContent = '全部拉取启动失败'; return; }
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (!dir) return;
+      const pr = await call('GET', `/pull-all-status?jobId=${encodeURIComponent(sj.jobId)}`);
+      const pj = JSON.parse(pr.body) as { ok: boolean; total: number; finished: number; done: boolean; results: { name: string; ok: boolean; conflict: boolean }[] };
+      if (!pj.ok) { syncEl.textContent = '全部拉取查询失败'; return; }
+      syncEl.textContent = `全部拉取 ${pj.finished}/${pj.total}…`;
+      syncEl.style.color = C.amber;
+      if (!pj.done) continue;
+      const okCount = pj.results.filter((x) => x.ok).length;
+      const conflicts = pj.results.filter((x) => x.conflict).map((x) => x.name);
+      const failed = pj.results.filter((x) => !x.ok && !x.conflict).map((x) => x.name);
+      syncEl.textContent = `全部拉取完成：成功 ${okCount}/${pj.total}${conflicts.length > 0 ? `，冲突 ${conflicts.join('、')} 请自行处理` : ''}${failed.length > 0 ? `，失败 ${failed.join('、')}` : ''}`;
+      syncEl.style.color = failed.length > 0 || conflicts.length > 0 ? C.amber : C.green;
+      break;
+    }
+  } catch {
+    syncEl.textContent = '全部拉取失败';
+  } finally {
+    btnPullAllEl.disabled = false;
+    if (dir) void loadProjects(dir);
+    void syncAll();
+  }
+};
 
 // 下载 = 原生 git pull，完事全量对比
 $('btn-pull').onclick = async () => {
