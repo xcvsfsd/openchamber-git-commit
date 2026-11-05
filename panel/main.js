@@ -271,8 +271,10 @@ ${rS}`;var z_=HT(),eS=document.querySelector("#root");if(!eS)throw Error("Missin
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
 body{margin:0;font:15px/1.6 system-ui,sans-serif}
-#root{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:100%}
-.top{display:flex;gap:8px;align-items:center}
+#root{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:100%;max-width:100%;overflow-x:hidden}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%}
+.top select{min-width:0}
+.top button{flex:none}
 select#project{border:2px solid var(--primary,#3574f0);background:color-mix(in srgb,var(--primary,#3574f0) 12%,var(--oc-elevated,#fff));font-weight:700}
 select{flex:1;padding:8px 10px;font-size:15px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,#fff);color:var(--oc-fg,inherit);color-scheme:light dark}
 select option{background:var(--oc-elevated,#fff);color:var(--oc-fg,#111)}
