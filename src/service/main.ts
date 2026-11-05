@@ -250,8 +250,31 @@ const server = http.createServer((req, res) => {
           out.push({ name, path: full, current: false });
         } catch { /* 非 git 跳过 */ }
       }
-      out.sort((a, b) => (a.current ? -1 : b.current ? 1 : a.name.localeCompare(b.name)));
-      json(res, 200, { ok: true, projects: out.slice(0, 100) });
+      // 每个项目：分支 + 超前落后 + 脏数（不 fetch，用上次远端状态，当前项目由面板 fetch 后刷新）
+      const withStat = [];
+      for (const pr of out.slice(0, 100)) {
+        let branch = '';
+        let ahead = 0;
+        let behind = 0;
+        let dirty = 0;
+        try {
+          const st = await runGit(pr.path, ['status', '--porcelain=v1', '-b']);
+          if (st.code === 0) {
+            const pp = parsePorcelain(st.stdout);
+            branch = pp.branch;
+            ahead = pp.ahead;
+            behind = pp.behind;
+            dirty = pp.files.length;
+            if (!branch) {
+              const br = await runGit(pr.path, ['branch', '--show-current']);
+              branch = br.stdout.trim();
+            }
+          }
+        } catch { /* 取不到就给空 */ }
+        withStat.push({ ...pr, branch, ahead, behind, dirty });
+      }
+      withStat.sort((a, b) => (a.current ? -1 : b.current ? 1 : a.name.localeCompare(b.name)));
+      json(res, 200, { ok: true, projects: withStat });
     })().catch(() => json(res, 500, { ok: false, error: 'projects-failed' }));
     return;
   }

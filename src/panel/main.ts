@@ -189,13 +189,13 @@ const friendlyErr = (e: string): string => {
 const loadProjects = async (ctxDir: string): Promise<void> => {
   try {
     const r = await call('GET', `/projects?dir=${encodeURIComponent(ctxDir)}`);
-    const j = JSON.parse(r.body) as { ok: boolean; projects?: { name: string; path: string; current: boolean }[] };
+    const j = JSON.parse(r.body) as { ok: boolean; projects?: { name: string; path: string; current: boolean; branch?: string; ahead?: number; behind?: number; dirty?: number }[] };
     if (!j.ok || !j.projects) return;
     projectSel.innerHTML = '';
     for (const pr of j.projects) {
       const o = document.createElement('option');
       o.value = pr.path;
-      o.textContent = pr.name;
+      o.textContent = projectLabel(pr);
       if (pr.current) o.selected = true;
       projectSel.appendChild(o);
     }
@@ -203,6 +203,13 @@ const loadProjects = async (ctxDir: string): Promise<void> => {
 };
 
 let lastBranchSig = '';
+// 项目选项：● 当前 + 分支 + 未拉取↓/超前↑
+const projectLabel = (pr: { name: string; branch?: string; ahead?: number; behind?: number; current?: boolean }): string => {
+  const behind = pr.behind ?? 0;
+  const ahead = pr.ahead ?? 0;
+  return `${pr.current ? '\u25cf ' : ''}${pr.name}${pr.branch ? ` ${pr.branch}` : ''}${behind > 0 ? ` \u2193${behind}` : ''}${ahead > 0 ? ` \u2191${ahead}` : ''}`;
+};
+
 const renderBranches = async (d: string, current: string): Promise<void> => {
   try {
     const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
@@ -424,6 +431,13 @@ const paintBranches = (st: StatusAnswer, d: string): void => {
   void renderBranches(d, st.branch ?? '');
 };
 
+// 当前项目选项用 fetch 后的新鲜数刷新
+const refreshCurrentProjectLabel = (st: StatusAnswer): void => {
+  const o = [...projectSel.options].find((x) => x.value === dir);
+  if (!o) return;
+  o.textContent = projectLabel({ name: o.textContent.replace(/^\u25cf /, '').split(' ')[0] ?? '', branch: st.branch ?? undefined, ahead: st.ahead, behind: st.behind, current: true });
+};
+
 const paintText = (st: StatusAnswer): void => {
   const ahead = st.ahead ?? 0;
   const behind = st.behind ?? 0;
@@ -450,6 +464,7 @@ const syncAll = async (): Promise<void> => {
     }
     showNongit(false);
     paintText(st);
+    refreshCurrentProjectLabel(st);
     paintBranches(st, d);
     renderRemote(st);
     renderLocal(st);
