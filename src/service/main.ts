@@ -56,7 +56,8 @@ const sanitizePaths = (paths: unknown): string[] | null => {
 
 const runGit = (dir: string, args: string[], input?: string): Promise<{ code: number; stdout: string; stderr: string }> =>
   new Promise((resolve) => {
-    const child = execFile('git', args, { cwd: dir, timeout: 60_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+    // 中文文件名不转义：quotepath 会把中文变成八进制导致后续按名操作失效
+    const child = execFile('git', ['-c', 'core.quotepath=false', ...args], { cwd: dir, timeout: 60_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
       resolve({
         code: typeof err?.code === 'number' ? err.code : err ? 1 : 0,
         stdout: String(stdout ?? ''),

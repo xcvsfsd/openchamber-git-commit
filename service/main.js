@@ -59,7 +59,7 @@ var sanitizePaths = (paths) => {
   return out;
 };
 var runGit = (dir, args, input) => new Promise((resolve) => {
-  const child = execFile("git", args, { cwd: dir, timeout: 60000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+  const child = execFile("git", ["-c", "core.quotepath=false", ...args], { cwd: dir, timeout: 60000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
     resolve({
       code: typeof err?.code === "number" ? err.code : err ? 1 : 0,
       stdout: String(stdout ?? ""),
