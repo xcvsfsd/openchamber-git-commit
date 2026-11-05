@@ -12,25 +12,25 @@ root.innerHTML = `
 <style>
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
-body{margin:0;font:13px/1.5 system-ui,sans-serif}
+body{margin:0;font:15px/1.6 system-ui,sans-serif}
 #root{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:100%}
 .top{display:flex;gap:8px;align-items:center}
-select{flex:1;padding:6px 8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,#fff);color:var(--oc-fg,inherit);color-scheme:light dark}
+select{flex:1;padding:8px 10px;font-size:15px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,#fff);color:var(--oc-fg,inherit);color-scheme:light dark}
 select option{background:var(--oc-elevated,#fff);color:var(--oc-fg,#111)}
-button{padding:6px 12px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);cursor:pointer;white-space:nowrap}
+button{padding:8px 14px;font-size:14px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);cursor:pointer;white-space:nowrap}
 button.primary{background:var(--primary,#3574f0);border-color:transparent;color:#fff}
 button:disabled{opacity:.5}
-.sync{font-size:12px;opacity:.75}
-h3{margin:6px 0 0;font-size:12px;opacity:.65;font-weight:600}
-table{width:100%;border-collapse:collapse;font-size:12px}
-td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
+.sync{font-size:13.5px;opacity:.8}
+h3{margin:6px 0 0;font-size:14px;opacity:.65;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+td{padding:8px 6px;border-bottom:1px solid #8882;vertical-align:middle}
 input[type=checkbox]{width:19px;height:19px;accent-color:var(--primary,#3574f0);cursor:pointer;flex:none;margin:0}
 .selbar{display:flex;gap:10px;align-items:center;background:#8881;border-radius:8px;padding:7px 10px;cursor:pointer;user-select:none}
 .selbar:hover{background:#8882}
-.selbar span{font-size:12px}
+.selbar span{font-size:14px}
 .file .p{cursor:pointer}
 .file .p:hover{text-decoration:underline}
-button.ai{background:linear-gradient(135deg,#8b5cf6,#3b82f6);border:none;color:#fff;font-weight:700;padding:6px 14px}
+button.ai{font-size:14px;background:linear-gradient(135deg,#8b5cf6,#3b82f6);border:none;color:#fff;font-weight:700;padding:6px 14px}
 button.ai:hover{filter:brightness(1.12)}
 button.icon{padding:4px 10px;font-size:13px}
 .mono{font-family:monospace}
@@ -42,9 +42,9 @@ button.icon{padding:4px 10px;font-size:13px}
 #conflict .big{font-size:44px}
 #conflict table{max-width:100%}
 #conflict td{border-bottom:1px solid #fff3}
-textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
+textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
-.mut{font-size:12px;opacity:.65}
+.mut{font-size:13.5px;opacity:.7}
 .spin{display:inline-block;animation:rot 1s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
 #done{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--oc-elevated,#000) 88%,transparent);z-index:10;text-align:center}
@@ -311,7 +311,7 @@ const renderLocal = (st: StatusAnswer): void => {
     tdS.style.minWidth = '92px';
     tdS.style.textAlign = 'right';
     tdS.style.whiteSpace = 'nowrap';
-    tdS.style.fontSize = '11px';
+    tdS.style.fontSize = '13px';
     tdS.className = 'mut';
     const nums = f.binary
       ? `<span style="color:${C.gray}">二进制</span>`
