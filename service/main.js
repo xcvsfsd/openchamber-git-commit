@@ -282,6 +282,45 @@ var server = http.createServer((req, res) => {
         const r = await runGit(dir, args);
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 3000) });
       }
+      if (url.pathname === "/restore") {
+        const paths = sanitizePaths(body.paths);
+        if (!paths)
+          return json(res, 400, { ok: false, error: "bad-paths" });
+        const confirmed = body.confirmed === true;
+        const ls = await runGit(dir, ["ls-files", "--", ...paths]);
+        const tracked = new Set(ls.stdout.split(`
+`).map((x) => x.trim()).filter(Boolean));
+        const untracked = paths.filter((x) => !tracked.has(x));
+        if (untracked.length > 0) {
+          if (!confirmed)
+            return json(res, 200, { ok: false, error: "need-confirm", untracked });
+          const realDir = fs.realpathSync(dir);
+          for (const u of untracked) {
+            const abs = path.resolve(dir, u);
+            let real;
+            try {
+              real = fs.realpathSync(abs);
+            } catch {
+              continue;
+            }
+            if (real !== realDir && !real.startsWith(realDir + path.sep)) {
+              return json(res, 400, { ok: false, error: "bad-paths" });
+            }
+            fs.rmSync(real, { recursive: true, force: true });
+          }
+          await runGit(dir, ["rm", "--cached", "--quiet", "--", ...untracked]);
+        }
+        const trackedPaths = paths.filter((x) => tracked.has(x));
+        if (trackedPaths.length > 0) {
+          let r = await runGit(dir, ["restore", "--source=HEAD", "--staged", "--worktree", "--", ...trackedPaths]);
+          if (r.code !== 0) {
+            r = await runGit(dir, ["checkout", "HEAD", "--", ...trackedPaths]);
+          }
+          if (r.code !== 0)
+            return json(res, 200, { ok: false, error: r.stderr.slice(0, 1000) });
+        }
+        return json(res, 200, { ok: true });
+      }
       if (url.pathname === "/checkout") {
         const branch = body.branch;
         const create = body.create === true;

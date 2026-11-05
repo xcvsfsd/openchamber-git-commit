@@ -285,6 +285,47 @@ const server = http.createServer((req, res) => {
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 3000) });
       }
 
+      // 还原：丢弃工作区改动。已跟踪走原生 git checkout HEAD --；未跟踪需 confirmed 二次确认后删除
+      if (url.pathname === '/restore') {
+        const paths = sanitizePaths(body.paths);
+        if (!paths) return json(res, 400, { ok: false, error: 'bad-paths' });
+        const confirmed = body.confirmed === true;
+        // 未跟踪（含新增）文件：git checkout 动不了，先分出来
+        const ls = await runGit(dir, ['ls-files', '--', ...paths]);
+        const tracked = new Set(ls.stdout.split('\n').map((x) => x.trim()).filter(Boolean));
+        const untracked = paths.filter((x) => !tracked.has(x));
+        if (untracked.length > 0) {
+          if (!confirmed) return json(res, 200, { ok: false, error: 'need-confirm', untracked });
+          // 防护：真路径必须落在仓库内，防穿越
+          const realDir = fs.realpathSync(dir);
+          for (const u of untracked) {
+            const abs = path.resolve(dir, u);
+            let real: string;
+            try {
+              real = fs.realpathSync(abs);
+            } catch {
+              continue; // 已不存在算还原成功
+            }
+            if (real !== realDir && !real.startsWith(realDir + path.sep)) {
+              return json(res, 400, { ok: false, error: 'bad-paths' });
+            }
+            fs.rmSync(real, { recursive: true, force: true });
+          }
+          // 顺带清掉可能已暂存的新文件索引
+          await runGit(dir, ['rm', '--cached', '--quiet', '--', ...untracked]);
+        }
+        const trackedPaths = paths.filter((x) => tracked.has(x));
+        if (trackedPaths.length > 0) {
+          // 原生 git restore：已暂存/未暂存一起回 HEAD，新增进索引的文件同时清掉
+          let r = await runGit(dir, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...trackedPaths]);
+          if (r.code !== 0) {
+            r = await runGit(dir, ['checkout', 'HEAD', '--', ...trackedPaths]);
+          }
+          if (r.code !== 0) return json(res, 200, { ok: false, error: r.stderr.slice(0, 1000) });
+        }
+        return json(res, 200, { ok: true });
+      }
+
       // 切换分支：原生 git switch / checkout
       if (url.pathname === '/checkout') {
         const branch = body.branch;

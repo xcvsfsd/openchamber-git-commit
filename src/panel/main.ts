@@ -241,7 +241,37 @@ const renderLocal = (st: StatusAnswer): void => {
     tdS.style.fontSize = '11px';
     tdS.className = 'mut';
     tdS.textContent = flagText(f.staged, f.unstaged);
-    tr.append(tdC, tdP, tdS);
+    const tdR = document.createElement('td');
+    tdR.style.width = '30px';
+    tdR.style.textAlign = 'right';
+    // 冲突文件不给还原：需手动处理
+    const conflicted = f.staged === 'U' || f.unstaged === 'U';
+    if (!conflicted) {
+      const rb = document.createElement('button');
+      rb.textContent = '↩';
+      rb.title = '还原：丢弃该文件本地改动';
+      rb.style.padding = '2px 7px';
+      rb.onclick = async () => {
+        if (!dir) return;
+        // 新增/未跟踪还原会删文件，先确认
+        const destructive = f.staged === '?' || f.staged === 'A';
+        if (destructive && !confirm(`确定丢弃 ${f.path} 的本地内容吗？`)) return;
+        rb.disabled = true;
+        const r = await call('POST', '/restore', { dir, paths: [f.path], confirmed: true });
+        const j = JSON.parse(r.body) as { ok: boolean; error?: string };
+        if (!j.ok && j.error === 'need-confirm') {
+          if (confirm(`确定删除未跟踪的 ${f.path} 吗？`)) {
+            await call('POST', '/restore', { dir, paths: [f.path], confirmed: true });
+          }
+        } else if (!j.ok) {
+          outEl.textContent = j.error || '还原失败';
+        }
+        rb.disabled = false;
+        void refreshLocal();
+      };
+      tdR.appendChild(rb);
+    }
+    tr.append(tdC, tdP, tdS, tdR);
     t.appendChild(tr);
   }
   localEl.appendChild(t);
