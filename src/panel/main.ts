@@ -37,7 +37,10 @@ button.icon{padding:4px 10px;font-size:13px}
 .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%}
 .empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0;opacity:.75}
 .empty .ic{font-size:26px;opacity:.4}
-#done[hidden],#nongit[hidden],#conflict[hidden]{display:none!important}
+#done[hidden],#nongit[hidden],#conflict[hidden],#confirm[hidden]{display:none!important}
+#confirm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:30;padding:20px}
+#confirm .box{background:var(--oc-elevated,#1c1c1e);border:1px solid var(--oc-border,#8888);border-radius:12px;padding:16px;max-width:100%;display:flex;flex-direction:column;gap:12px}
+#confirm .msg{font-size:14px;word-break:break-all}
 #conflict{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,#7f1d1d 92%,transparent);z-index:20;text-align:center;padding:16px}
 #conflict .big{font-size:44px}
 #conflict table{max-width:100%}
@@ -66,6 +69,15 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 <div id="remote"><div class="mut">—</div></div>
 <h3 id="h-local">本地未提交</h3>
 <div id="local"><div class="mut">—</div></div>
+<div id="confirm" hidden>
+  <div class="box">
+    <div class="msg" id="confirm-msg"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="confirm-cancel">取消</button>
+      <button id="confirm-ok" class="primary">确定删除</button>
+    </div>
+  </div>
+</div>
 <div id="conflict" hidden>
   <div class="big">⛔</div>
   <div style="font-size:15px;font-weight:700">出现合并冲突请自行处理</div>
@@ -104,6 +116,17 @@ const commitBoxEl = $('commitBox');
 const doneEl = $('done');
 // 远程全名集合：选中远程=本地新建同名跟踪分支
 const remoteNames = new Set<string>();
+const confirmEl = $('confirm');
+const confirmMsgEl = $('confirm-msg');
+let confirmResolve: ((v: boolean) => void) | null = null;
+// 沙盒 iframe 原生 confirm 会被拦：面板内自绘确认框
+const askConfirm = (msg: string): Promise<boolean> => {
+  confirmMsgEl.textContent = msg;
+  confirmEl.hidden = false;
+  return new Promise<boolean>((resolve) => { confirmResolve = resolve; });
+};
+$('confirm-ok').onclick = () => { confirmEl.hidden = true; confirmResolve?.(true); confirmResolve = null; };
+$('confirm-cancel').onclick = () => { confirmEl.hidden = true; confirmResolve?.(false); confirmResolve = null; };
 const conflictEl = $('conflict');
 const conflictListEl = $('conflict-list');
 
@@ -333,17 +356,17 @@ const renderLocal = (st: StatusAnswer): void => {
       rb.className = 'icon';
       rb.onclick = async () => {
         if (!dir) return;
-        // 新增/未跟踪还原=删除文件：双重确认防手滑
+        // 新增/未跟踪还原=删除文件：自绘双重确认防手滑
         const destructive = f.staged === '?' || f.staged === 'A';
         if (destructive) {
-          if (!confirm(`确定丢弃 ${f.path} 的本地内容吗？删除后不可恢复`)) return;
-          if (!confirm(`再次确认：真的删除 ${f.path} 吗？`)) return;
+          if (!(await askConfirm(`确定丢弃 ${f.path} 的本地内容吗？删除后不可恢复`))) return;
+          if (!(await askConfirm(`再次确认：真的删除 ${f.path} 吗？`))) return;
         }
         rb.disabled = true;
         const r = await call('POST', '/restore', { dir, paths: [f.path], confirmed: true });
         const j = JSON.parse(r.body) as { ok: boolean; error?: string };
         if (!j.ok && j.error === 'need-confirm') {
-          if (confirm(`确定删除未跟踪的 ${f.path} 吗？`)) {
+          if (await askConfirm(`确定删除未跟踪的 ${f.path} 吗？`)) {
             await call('POST', '/restore', { dir, paths: [f.path], confirmed: true });
           }
         } else if (!j.ok) {
