@@ -238,10 +238,10 @@ const renderRemote = (st: StatusAnswer): void => {
     meta.className = 'mut';
     meta.textContent = `${c.date} ${c.author} `;
     const body = document.createElement('span');
-    body.textContent = `${c.sha} ${c.subject}`;
+    body.textContent = c.subject;
     body.style.color = dl ? C.gray : 'inherit';
     if (!dl) body.style.fontWeight = '700';
-    td.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}（${dl ? '已下载' : '未下载'}）`;
+    td.title = `${c.subject} · ${c.author} ${c.date}（${dl ? '已下载' : '未下载'}）`;
     td.append(dot, meta, body);
     tr.appendChild(td);
     t.appendChild(tr);
