@@ -188,6 +188,25 @@ const renderRemote = (st: StatusAnswer): void => {
 };
 
 // XY 状态码转中文：M修改 A新增 D删除 R重命名 C复制 T类型变更 U冲突 ?未跟踪
+// 语义色：深浅主题都可读
+const C = {
+  green: '#4ade80',
+  red: '#f87171',
+  amber: '#fbbf24',
+  blue: '#60a5fa',
+  purple: '#c084fc',
+  gray: '#9ca3af',
+} as const;
+const flagColor = (x: string, y: string): string => {
+  const c = `${x}${y}`;
+  if (c === '??') return C.purple;
+  if (x === 'U' || y === 'U') return C.red;
+  if (x === 'D' || y === 'D') return C.red;
+  if (x === 'A' || y === 'A') return C.green;
+  if (x === 'R' || y === 'R' || x === 'C' || y === 'C') return C.blue;
+  if (x === 'M' || y === 'M') return C.amber;
+  return C.gray;
+};
 const flagText = (x: string, y: string): string => {
   const c = `${x}${y}`;
   if (c === '??') return '未跟踪';
@@ -265,9 +284,14 @@ const renderLocal = (st: StatusAnswer): void => {
     tdS.style.whiteSpace = 'nowrap';
     tdS.style.fontSize = '11px';
     tdS.className = 'mut';
-    const stat = f.binary ? '二进制' : (f.add !== undefined ? `+${f.add} -${f.del ?? 0} ` : '') + flagText(f.staged, f.unstaged);
-    tdS.textContent = stat;
-    tdS.title = stat;
+    const nums = f.binary
+      ? `<span style="color:${C.gray}">二进制</span>`
+      : (f.add !== undefined
+        ? `<span style="color:${C.green}">+${f.add}</span> <span style="color:${C.red}">-${f.del ?? 0}</span> `
+        : '');
+    const ft = flagText(f.staged, f.unstaged);
+    tdS.innerHTML = `${nums}<span style="color:${flagColor(f.staged, f.unstaged)}">${ft}</span>`;
+    tdS.title = tdS.textContent ?? '';
     const tdR = document.createElement('td');
     tdR.style.width = '30px';
     tdR.style.textAlign = 'right';
@@ -311,10 +335,10 @@ const paintBranches = (st: StatusAnswer, d: string): void => {
 const paintText = (st: StatusAnswer): void => {
   const ahead = st.ahead ?? 0;
   const behind = st.behind ?? 0;
-  if (behind > 0 && ahead > 0) syncEl.textContent = `远程 ${behind} 个新，本地超前 ${ahead}`;
-  else if (behind > 0) syncEl.textContent = `远程有 ${behind} 个新提交，可下载`;
-  else if (ahead > 0) syncEl.textContent = `本地超前 ${ahead}可推送`;
-  else syncEl.textContent = '已是最新';
+  if (behind > 0 && ahead > 0) { syncEl.textContent = `远程 ${behind} 个新，本地超前 ${ahead}`; syncEl.style.color = C.amber; }
+  else if (behind > 0) { syncEl.textContent = `远程有 ${behind} 个新提交，可下载`; syncEl.style.color = C.amber; }
+  else if (ahead > 0) { syncEl.textContent = `本地超前 ${ahead}可推送`; syncEl.style.color = C.blue; }
+  else { syncEl.textContent = '已是最新'; syncEl.style.color = C.green; }
   void host.setBadge(st.files?.length ? st.files.length : null).catch(() => undefined);
 };
 
