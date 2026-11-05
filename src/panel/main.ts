@@ -1,6 +1,5 @@
-// Panel v2：对齐 OpenChamber 自带 Git 页极简布局。
-// 头部：分支下拉 + 同步按钮；进入自动 fetch 对远程，无需手动刷新。
-// 干净显示大空态，脏时只列文件 + 底部提交框。
+// Panel v3：远程下载与本地未提交分两个表；本地表 5 秒自动刷 + 手动刷新。
+// 进入自动 fetch 对远程；下载按钮走原生 git pull。
 import { connectHost, HostRequestError } from '@openchamber/sdk';
 import { applyHostReady } from '@openchamber/sdk/ui';
 import type { StatusAnswer, BranchEntry } from '../shared/types.ts';
@@ -22,21 +21,27 @@ button{padding:6px 12px;border:1px solid var(--oc-border,var(--border,#8888));bo
 button.primary{background:var(--primary,#3574f0);border-color:transparent;color:#fff}
 button:disabled{opacity:.5}
 .sync{font-size:12px;opacity:.75}
-.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 0;opacity:.8}
-.empty .ic{font-size:28px;opacity:.4}
-.file{display:flex;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid #8882;font-family:monospace;font-size:12px}
-.file .p{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+h3{margin:6px 0 0;font-size:12px;opacity:.65;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12px}
+td{padding:5px 4px;border-bottom:1px solid #8882;vertical-align:middle}
+.mono{font-family:monospace}
+.ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0;opacity:.75}
+.empty .ic{font-size:26px;opacity:.4}
 textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);resize:vertical}
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
-.err{font-size:12px;color:var(--error,#d33);white-space:pre-wrap}
 </style>
 <div class="top">
   <select id="branch" title="分支，选中直接切换"></select>
-  <button id="btn-sync" title="拉取远程代码">下载</button>
+  <button id="btn-pull" title="拉取远程代码 git pull">下载</button>
+  <button id="btn-refresh" title="重新对比远程与本地">↻</button>
 </div>
 <div id="sync" class="sync">等待项目…</div>
-<div id="body" style="flex:1;display:flex;flex-direction:column;gap:8px"></div>
+<h3>远程新提交</h3>
+<div id="remote"><div class="mut">—</div></div>
+<h3>本地未提交</h3>
+<div id="local"><div class="mut">—</div></div>
 <div id="commitBox">
   <textarea id="msg" placeholder="提交信息，如 feat: xxx"></textarea>
   <div class="row" style="margin-top:8px">
@@ -51,141 +56,167 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 const $ = <T extends HTMLElement>(id: string): T => document.querySelector(`#${id}`) as T;
 const branchSel = $<HTMLSelectElement>('branch');
 const syncEl = $('sync');
-const bodyEl = $('body');
+const remoteEl = $('remote');
+const localEl = $('local');
 const msgEl = $('msg') as unknown as HTMLTextAreaElement;
 const outEl = $('out');
 
 let dir: string | null = null;
-let syncing = false;
+let busy = false;
 
 const call = (method: 'GET' | 'POST', p: string, body?: unknown) =>
   host.serviceRequest({ method, path: p, body: body === undefined ? undefined : JSON.stringify(body) });
 
-// 进入自动：fetch + status，一次看完本地与远程
-const sync = async (): Promise<void> => {
-  if (!dir || syncing) return;
-  syncing = true;
+// 分支下拉只在进入/切换后重建，避免打断选择
+const renderBranches = async (d: string, current: string): Promise<void> => {
+  try {
+    const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
+    const bj = JSON.parse(br.body) as { ok: boolean; branches?: BranchEntry[] };
+    if (!bj.ok || !bj.branches) return;
+    if (branchSel.value && branchSel.value === current && branchSel.options.length > 0) return;
+    branchSel.innerHTML = '';
+    for (const b of bj.branches) {
+      const o = document.createElement('option');
+      o.value = b.name;
+      o.textContent = b.name;
+      if (b.current) o.selected = true;
+      branchSel.appendChild(o);
+    }
+  } catch { /* 不挡主流程 */ }
+};
+
+// 远程表：一行一个提交
+const renderRemote = (st: StatusAnswer): void => {
+  remoteEl.innerHTML = '';
+  const incoming = st.incoming ?? [];
+  if (incoming.length === 0) {
+    remoteEl.innerHTML = '<div class="mut">无，远程与本地一致</div>';
+    return;
+  }
+  const t = document.createElement('table');
+  for (const c of incoming) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'mono ellipsis';
+    td.textContent = `${c.sha} ${c.subject}`;
+    td.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}`;
+    tr.appendChild(td);
+    t.appendChild(tr);
+  }
+  remoteEl.appendChild(t);
+};
+
+// 本地表：未提交文件独立表格勾选暂存
+const renderLocal = (st: StatusAnswer): void => {
+  localEl.innerHTML = '';
+  const files = st.files ?? [];
+  if (files.length === 0) {
+    const w = document.createElement('div');
+    w.className = 'empty';
+    w.innerHTML = `<div class="ic">—○—</div><div>工作区干净</div>`;
+    localEl.appendChild(w);
+    return;
+  }
+  const t = document.createElement('table');
+  for (const f of files) {
+    const tr = document.createElement('tr');
+    const tdC = document.createElement('td');
+    tdC.style.width = '28px';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = (f.staged.trim() !== '' && f.staged !== '?' && f.staged !== ' ');
+    cb.title = cb.checked ? '已暂存点取消' : '未暂存点暂存';
+    cb.onchange = async () => {
+      if (!dir) return;
+      await call('POST', cb.checked ? '/stage' : '/unstage', { dir, paths: [f.path] });
+      void refreshLocal();
+    };
+    tdC.appendChild(cb);
+    const tdP = document.createElement('td');
+    tdP.className = 'mono ellipsis';
+    tdP.textContent = f.path;
+    tdP.title = f.path;
+    const tdS = document.createElement('td');
+    tdS.style.width = '36px';
+    tdS.className = 'mut mono';
+    tdS.textContent = `${f.staged.trim() || '·'}${f.unstaged.trim() || '·'}`;
+    tr.append(tdC, tdP, tdS);
+    t.appendChild(tr);
+  }
+  localEl.appendChild(t);
+};
+
+const paintBranches = (st: StatusAnswer, d: string): void => {
+  void renderBranches(d, st.branch ?? '');
+};
+
+const paintText = (st: StatusAnswer): void => {
+  const ahead = st.ahead ?? 0;
+  const behind = st.behind ?? 0;
+  if (behind > 0 && ahead > 0) syncEl.textContent = `远程 ${behind} 个新，本地超前 ${ahead}`;
+  else if (behind > 0) syncEl.textContent = `远程有 ${behind} 个新提交，可下载`;
+  else if (ahead > 0) syncEl.textContent = `本地超前 ${ahead}可推送`;
+  else syncEl.textContent = '已是最新';
+  void host.setBadge(st.files?.length ? st.files.length : null).catch(() => undefined);
+};
+
+// 全量：fetch + status，远程对比用
+const syncAll = async (): Promise<void> => {
+  if (!dir || busy) return;
+  busy = true;
   const d = dir;
   syncEl.textContent = '同步中…';
   try {
     await call('POST', '/fetch', { dir: d }).catch(() => undefined);
     const r = await call('GET', `/status?dir=${encodeURIComponent(d)}`);
     const st = JSON.parse(r.body) as StatusAnswer;
-    if (!st.ok) { syncEl.textContent = st.error ?? '不是 git 仓库'; renderEmpty('不是 git 仓库'); return; }
-    // 分支下拉
-    try {
-      const br = await call('GET', `/branches?dir=${encodeURIComponent(d)}`);
-      const bj = JSON.parse(br.body) as { ok: boolean; branches?: BranchEntry[] };
-      if (bj.ok && bj.branches) {
-        branchSel.innerHTML = '';
-        for (const b of bj.branches) {
-          const o = document.createElement('option');
-          o.value = b.name;
-          o.textContent = b.name;
-          if (b.current) o.selected = true;
-          branchSel.appendChild(o);
-        }
-      }
-    } catch { /* 不挡主流程 */ }
-    // 远程对比文案
-    const ahead = st.ahead ?? 0;
-    const behind = st.behind ?? 0;
-    if (behind > 0 && ahead > 0) syncEl.textContent = `远程有 ${behind} 个新提交，本地超前 ${ahead}`;
-    else if (behind > 0) syncEl.textContent = `远程有 ${behind} 个新提交，可 Pull`;
-    else if (ahead > 0) syncEl.textContent = `本地超前 ${ahead}，可 Push`;
-    else syncEl.textContent = '已是最新';
-    renderFiles(st);
-    void host.setBadge(st.files?.length ? st.files.length : null).catch(() => undefined);
+    if (!st.ok || st.branch === undefined) { syncEl.textContent = st.error ?? '不是 git 仓库'; return; }
+    paintText(st);
+    paintBranches(st, d);
+    renderRemote(st);
+    renderLocal(st);
   } catch (e) {
     syncEl.textContent = e instanceof HostRequestError ? `${e.code}` : '同步失败';
   } finally {
-    syncing = false;
+    busy = false;
   }
 };
 
-// 干净大空态，对齐自带页
-const renderEmpty = (tip: string): void => {
-  bodyEl.innerHTML = '';
-  const w = document.createElement('div');
-  w.className = 'empty';
-  w.innerHTML = `<div class="ic">—○—</div><div>工作区干净</div><div class="mut">${tip}</div>`;
-  bodyEl.appendChild(w);
-};
-
-const renderFiles = (st: StatusAnswer): void => {
-  bodyEl.innerHTML = '';
-  // 远程新提交：一行一个，先展示
-  const incoming = st.incoming ?? [];
-  if (incoming.length > 0) {
-    const h = document.createElement('div');
-    h.className = 'mut';
-    h.textContent = `远程 ${incoming.length} 个新提交：`;
-    bodyEl.appendChild(h);
-    for (const c of incoming) {
-      const row = document.createElement('div');
-      row.className = 'file';
-      const sp = document.createElement('span');
-      sp.className = 'p';
-      sp.textContent = `${c.sha} ${c.subject}`;
-      sp.title = `${c.sha} ${c.subject} · ${c.author} ${c.date}`;
-      bodyEl.appendChild(row);
-      row.appendChild(sp);
-    }
-  }
-  const files = st.files ?? [];
-  if (files.length === 0 && incoming.length === 0) {
-    renderEmpty('来吧，写点代码，改动自然就来了。');
-    return;
-  }
-  if (files.length === 0) {
-    const w = document.createElement('div');
-    w.className = 'empty';
-    w.innerHTML = `<div class="ic">—○—</div><div>工作区干净</div>`;
-    bodyEl.appendChild(w);
-    return;
-  }
-  for (const f of files) {
-    const row = document.createElement('div');
-    row.className = 'file';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = (f.staged.trim() !== '' && f.staged !== '?' && f.staged !== ' ');
-    cb.title = cb.checked ? '已暂存，点取消' : '未暂存，点暂存';
-    cb.onchange = async () => {
-      if (!dir) return;
-      await call('POST', cb.checked ? '/stage' : '/unstage', { dir, paths: [f.path] });
-      void sync();
-    };
-    const sp = document.createElement('span');
-    sp.className = 'p';
-    sp.textContent = f.path;
-    sp.title = f.path;
-    const tag = document.createElement('span');
-    tag.className = 'mut';
-    tag.textContent = `${f.staged.trim() || '·'}${f.unstaged.trim() || '·'}`;
-    row.append(cb, sp, tag);
-    bodyEl.appendChild(row);
+// 轻量：只 status 不 fetch，本地改代码自动刷出来
+const refreshLocal = async (): Promise<void> => {
+  if (!dir || busy || document.hidden) return;
+  busy = true;
+  try {
+    const r = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
+    const st = JSON.parse(r.body) as StatusAnswer;
+    if (!st.ok) return;
+    renderLocal(st);
+    void host.setBadge(st.files?.length ? st.files.length : null).catch(() => undefined);
+  } catch { /* 静默下次再试 */ } finally {
+    busy = false;
   }
 };
 
-// 下载 = 拉取远程代码，原生 git pull，完事自动对比
-$('btn-sync').onclick = async () => {
+$('btn-refresh').onclick = () => void syncAll();
+
+// 下载 = 原生 git pull，完事全量对比
+$('btn-pull').onclick = async () => {
   if (!dir) return;
   syncEl.textContent = '下载中…';
   try {
     await call('POST', '/pull', { dir });
-  } catch { /* pull 结果在 sync 里体现 */ }
-  void sync();
+  } catch { /* 结果在 syncAll 里体现 */ }
+  void syncAll();
 };
 
-// 切分支 = 下拉切换，直接 checkout
+// 切分支 = 下拉选中直接 checkout
 branchSel.onchange = async () => {
   if (!dir || !branchSel.value) return;
   syncEl.textContent = `切换到 ${branchSel.value}…`;
   const r = await call('POST', '/checkout', { dir, branch: branchSel.value });
   const j = JSON.parse(r.body);
   if (!j.ok) syncEl.textContent = j.output || j.error || '切换失败';
-  void sync();
+  void syncAll();
 };
 
 $('btn-commit').onclick = async () => {
@@ -197,7 +228,7 @@ $('btn-commit').onclick = async () => {
   const j = JSON.parse(r.body);
   outEl.textContent = j.ok ? '已提交并推送' : (j.error || '提交失败');
   if (j.ok) msgEl.value = '';
-  void sync();
+  void syncAll();
 };
 
 $('btn-ai').onclick = async () => {
@@ -224,12 +255,23 @@ host.onResolve(async ({ args }) => {
   return null;
 });
 
+// 本地 5 秒一刷：改代码自动出来；切回可见立刻刷
+setInterval(() => void refreshLocal(), 5000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void refreshLocal();
+});
+
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
   const next = ctx.directory ?? null;
   if (next !== dir) {
     dir = next;
-    if (!dir) { syncEl.textContent = '无项目'; renderEmpty('先打开一个项目'); return; }
-    void sync();
+    if (!dir) {
+      syncEl.textContent = '无项目';
+      remoteEl.innerHTML = '<div class="mut">—</div>';
+      localEl.innerHTML = '<div class="mut">先打开一个项目</div>';
+      return;
+    }
+    void syncAll();
   }
 });
