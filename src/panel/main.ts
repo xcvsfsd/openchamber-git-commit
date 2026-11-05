@@ -32,15 +32,18 @@ textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--oc-border
 .row{display:flex;gap:8px;align-items:center}
 .mut{font-size:12px;opacity:.65}
 </style>
-<div class="top">
+<div class="top" id="topbar">
   <select id="branch" title="分支，选中直接切换"></select>
   <button id="btn-pull" title="拉取远程代码 git pull">下载</button>
   <button id="btn-refresh" title="重新对比远程与本地">↻</button>
 </div>
 <div id="sync" class="sync">等待项目…</div>
-<h3>远程新提交</h3>
+<div id="nongit" class="empty" hidden>
+  <div class="ic">—○—</div><div>非git项目</div><div class="mut">先打开一个 git 仓库项目</div>
+</div>
+<h3 id="h-remote">远程新提交</h3>
 <div id="remote"><div class="mut">—</div></div>
-<h3>本地未提交</h3>
+<h3 id="h-local">本地未提交</h3>
 <div id="local"><div class="mut">—</div></div>
 <div id="commitBox">
   <textarea id="msg" placeholder="提交信息，如 feat: xxx"></textarea>
@@ -60,6 +63,23 @@ const remoteEl = $('remote');
 const localEl = $('local');
 const msgEl = $('msg') as unknown as HTMLTextAreaElement;
 const outEl = $('out');
+const topbarEl = $('topbar');
+const hRemoteEl = $('h-remote');
+const hLocalEl = $('h-local');
+const nongitEl = $('nongit');
+const commitBoxEl = $('commitBox');
+
+// 非git时整页只留一句提示其余全藏
+const showNongit = (on: boolean): void => {
+  nongitEl.hidden = !on;
+  topbarEl.style.display = on ? 'none' : '';
+  syncEl.style.display = on ? 'none' : '';
+  hRemoteEl.style.display = on ? 'none' : '';
+  remoteEl.style.display = on ? 'none' : '';
+  hLocalEl.style.display = on ? 'none' : '';
+  localEl.style.display = on ? 'none' : '';
+  commitBoxEl.style.display = on ? 'none' : '';
+};
 
 let dir: string | null = null;
 let busy = false;
@@ -197,15 +217,10 @@ const syncAll = async (): Promise<void> => {
     const r = await call('GET', `/status?dir=${encodeURIComponent(d)}`);
     const st = JSON.parse(r.body) as StatusAnswer;
     if (!st.ok || st.branch === undefined) {
-      syncEl.textContent = friendlyErr(st.error ?? '非git项目');
-      remoteEl.innerHTML = '<div class="mut">—</div>';
-      localEl.innerHTML = '';
-      const w = document.createElement('div');
-      w.className = 'empty';
-      w.innerHTML = '<div class="ic">—○—</div><div>非git项目</div><div class="mut">先打开一个 git 仓库项目</div>';
-      localEl.appendChild(w);
+      showNongit(true);
       return;
     }
+    showNongit(false);
     paintText(st);
     paintBranches(st, d);
     renderRemote(st);
@@ -316,9 +331,7 @@ host.onReady((ctx) => {
   if (next !== dir) {
     dir = next;
     if (!dir) {
-      syncEl.textContent = '无项目';
-      remoteEl.innerHTML = '<div class="mut">—</div>';
-      localEl.innerHTML = '<div class="mut">先打开一个项目</div>';
+      showNongit(true);
       return;
     }
     void syncAll();
