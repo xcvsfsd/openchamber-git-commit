@@ -15,6 +15,7 @@ root.innerHTML = `
 body{margin:0;font:15px/1.6 system-ui,sans-serif}
 #root{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:100%}
 .top{display:flex;gap:8px;align-items:center}
+select#project{border:2px solid var(--primary,#3574f0);background:color-mix(in srgb,var(--primary,#3574f0) 12%,var(--oc-elevated,#fff));font-weight:700}
 select{flex:1;padding:8px 10px;font-size:15px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,#fff);color:var(--oc-fg,inherit);color-scheme:light dark}
 select option{background:var(--oc-elevated,#fff);color:var(--oc-fg,#111)}
 button{padding:8px 14px;font-size:14px;border:1px solid var(--oc-border,var(--border,#8888));border-radius:8px;background:var(--oc-elevated,inherit);color:var(--oc-fg,inherit);cursor:pointer;white-space:nowrap}
@@ -120,7 +121,9 @@ const projNameEl = $('proj-name');
 // 分支前显示项目名
 const paintProjName = (): void => {
   const p = (dir ?? '').split('/').filter(Boolean).pop() ?? '';
-  projNameEl.textContent = p;
+  projNameEl.textContent = `● ${p}`;
+  projNameEl.style.color = C.green;
+  projNameEl.style.fontWeight = '700';
   projNameEl.style.maxWidth = '120px';
   projNameEl.style.overflow = 'hidden';
   projNameEl.style.textOverflow = 'ellipsis';
