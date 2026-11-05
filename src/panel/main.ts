@@ -655,14 +655,43 @@ $('btn-ai').onclick = async () => {
       } catch { /* 单个失败跳过 */ }
       if (diffs.length > 6000) break;
     }
-    const files = sel.map((f) => `${f.staged}${f.unstaged} ${f.path}`).join('\n').slice(0, 1000);
+    const files = sel.map((f) => `- ${f.staged}${f.unstaged} ${f.path}`).join('\n').slice(0, 1000);
+    // 对齐自带：按近期提交风格生成 subject + highlights（JSON）
+    const recentLines = (st.recent ?? []).slice(0, 8).map((c) => `- ${c.subject}`).join('\n') || '- （无历史提交）';
     const { text } = await host.generate({
-      system: '只输出一行 Conventional Commits 短句，无解释。',
-      prompt: `分支 ${st.branch}\n已选文件：\n${files}${diffs.slice(0, 6000)}`,
-      maxOutputTokens: 100,
+      system: 'You are generating a Conventional Commits subject line from the diffs of the selected files.',
+      prompt: `Return exactly one JSON object and nothing else. Do not include prose, markdown, explanations, or code fences.
+
+The JSON object must have exactly this shape:
+{"subject": string, "highlights": string[]}
+
+Rules:
+- match the style of the recent commits below: their language, capitalization, use or absence of a type prefix or scope, and typical length
+- if the recent commits are written in a language other than English, write the subject and highlights in that language
+- when the recent commits show no consistent style, use the format <type>: <summary> with one of: feat, fix, refactor, perf, docs, test, build, ci, chore, style, revert, and no scope
+- keep subject concise and user-facing
+- highlights: 0-3 concise user-facing points
+- use double quotes for all JSON strings
+- do not include trailing commas or comments
+
+Recent commits on this branch (newest first):
+${recentLines}
+
+Selected files:
+${files}${diffs ? `\nDiffs:\n${diffs.slice(0, 6000)}` : ''}`,
+      maxOutputTokens: 500,
     });
-    msgEl.value = text.trim();
-    outEl.textContent = `已按 ${sel.length} 个勾选文件生成`;
+    const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    try {
+      const parsed = JSON.parse(cleaned) as { subject?: string; highlights?: string[] };
+      if (!parsed.subject) throw new Error('empty');
+      msgEl.value = parsed.subject.trim();
+      const hs = (parsed.highlights ?? []).filter(Boolean).slice(0, 3);
+      outEl.textContent = `已按 ${sel.length} 个勾选文件生成${hs.length > 0 ? `：${hs.join('；')}` : ''}`;
+    } catch {
+      msgEl.value = (cleaned.split('\n')[0] ?? '').slice(0, 200);
+      outEl.textContent = `已按 ${sel.length} 个勾选文件生成（原文回填）`;
+    }
   } catch {
     outEl.textContent = '无小模型或未授权 model';
   }
