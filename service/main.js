@@ -236,6 +236,17 @@ var server = http.createServer((req, res) => {
         }
         return json(res, 200, { ok: true });
       }
+      if (url.pathname === "/fetch") {
+        const remote = body.remote;
+        let args = ["fetch", "--prune"];
+        if (remote !== undefined && remote !== null && remote !== "") {
+          if (!isValidRemote(remote))
+            return json(res, 400, { ok: false, error: "bad-remote" });
+          args.push(remote);
+        }
+        const r = await runGit(dir, args);
+        return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 2000) });
+      }
       if (url.pathname === "/pull") {
         const r = await runGit(dir, ["pull"]);
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 3000) });

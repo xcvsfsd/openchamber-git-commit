@@ -237,6 +237,18 @@ const server = http.createServer((req, res) => {
         return json(res, 200, { ok: true });
       }
 
+      // 同步：原生 git fetch，面板进入自动调，对比远程是否有新提交
+      if (url.pathname === '/fetch') {
+        const remote = body.remote;
+        let args = ['fetch', '--prune'];
+        if (remote !== undefined && remote !== null && remote !== '') {
+          if (!isValidRemote(remote)) return json(res, 400, { ok: false, error: 'bad-remote' });
+          args.push(remote as string);
+        }
+        const r = await runGit(dir, args);
+        return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 2000) });
+      }
+
       // 拉取：原生 git pull
       if (url.pathname === '/pull') {
         const r = await runGit(dir, ['pull']);
