@@ -4,6 +4,9 @@ JetBrains 式 Git 提交面板，给 OpenChamber 用的扩展。全走 git 原�
 
 Git commit panel for OpenChamber in the style of JetBrains: branches, pull/push, staging, AI commit messages via Small Model. Chinese interface, all operations run native `git` commands.
 
+<img width="951" height="756" alt="image" src="https://github.com/user-attachments/assets/d5431cc3-6d62-421e-82ee-7d89f59d2639" />
+
+
 ## 功能
 
 - 项目切换：默认当前项目，可切上层目录下其他 git 仓，`●` = 操作仓，`（会话）` = 聊天所在仓
