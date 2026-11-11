@@ -67,6 +67,7 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
   <span id="proj-name" class="mut" title="当前项目"></span>
   <select id="branch" title="分支，选中直接切换"></select>
   <button id="btn-pull" title="拉取远程代码 git pull">下载</button>
+  <button id="btn-push" title="推送本地提交 git push">推送</button>
   <button id="btn-refresh" title="重新对比远程与本地">↻</button>
 </div>
 <div id="sync" class="sync">等待项目…</div>
@@ -75,6 +76,8 @@ textarea{width:100%;min-height:76px;padding:10px;font-size:14.5px;border:1px sol
 </div>
 <h3 id="h-remote">远程新提交</h3>
 <div id="remote"><div class="mut">—</div></div>
+<h3 id="h-outgoing">待推送</h3>
+<div id="outgoing"><div class="mut">—</div></div>
 <h3 id="h-local">本地未提交</h3>
 <div id="local"><div class="mut">—</div></div>
 <div id="confirm" hidden>
@@ -114,6 +117,7 @@ const projectSel = $<HTMLSelectElement>('project');
 const branchSel = $<HTMLSelectElement>('branch');
 const syncEl = $('sync');
 const remoteEl = $('remote');
+const outgoingEl = $('outgoing');
 const localEl = $('local');
 const msgEl = $('msg') as unknown as HTMLTextAreaElement;
 const outEl = $('out');
@@ -133,6 +137,7 @@ const paintProjName = (): void => {
   projNameEl.style.flex = 'none';
 };
 const hRemoteEl = $('h-remote');
+const hOutgoingEl = $('h-outgoing');
 const hLocalEl = $('h-local');
 const nongitEl = $('nongit');
 const commitBoxEl = $('commitBox');
@@ -188,6 +193,8 @@ const showNongit = (on: boolean): void => {
   syncEl.style.display = on ? 'none' : '';
   hRemoteEl.style.display = on ? 'none' : '';
   remoteEl.style.display = on ? 'none' : '';
+  hOutgoingEl.style.display = on ? 'none' : '';
+  outgoingEl.style.display = on ? 'none' : '';
   hLocalEl.style.display = on ? 'none' : '';
   localEl.style.display = on ? 'none' : '';
   commitBoxEl.style.display = on ? 'none' : '';
@@ -309,6 +316,43 @@ const renderRemote = (st: StatusAnswer): void => {
     t.appendChild(tr);
   }
   remoteEl.appendChild(t);
+};
+
+// 待推送区：独立于远程表，上限 20 全显；无上游提示未设上游
+const renderOutgoing = (st: StatusAnswer): void => {
+  outgoingEl.innerHTML = '';
+  // 无上游：按方案提示，不拿 recent 顶替
+  if (!st.upstream) {
+    outgoingEl.innerHTML = '<div class="mut">未设上游，推送时需先建跟踪</div>';
+    return;
+  }
+  const list = (st.outgoing ?? []).slice(0, 20);
+  const ahead = st.ahead ?? 0;
+  if (list.length === 0) {
+    outgoingEl.innerHTML = `<div class="mut">${ahead > 0 ? `超前 ${ahead}，明细取失败` : '无待推送'}</div>`;
+    return;
+  }
+  const t = document.createElement('table');
+  t.style.tableLayout = 'fixed';
+  for (const c of list) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'mono ellipsis';
+    td.style.fontSize = '12px';
+    const dot = document.createElement('span');
+    dot.textContent = '● ';
+    dot.style.color = C.blue;
+    const meta = document.createElement('span');
+    meta.className = 'mut';
+    meta.textContent = `${c.date} ${c.author} `;
+    const body = document.createElement('span');
+    body.textContent = c.subject;
+    td.title = `${c.subject} · ${c.author} ${c.date}`;
+    td.append(dot, meta, body);
+    tr.appendChild(td);
+    t.appendChild(tr);
+  }
+  outgoingEl.appendChild(t);
 };
 
 // XY 状态码转中文：M修改 A新增 D删除 R重命名 C复制 T类型变更 U冲突 ?未跟踪
@@ -504,6 +548,7 @@ const syncAll = async (): Promise<void> => {
     refreshCurrentProjectLabel(st);
     paintBranches(st, d);
     renderRemote(st);
+    renderOutgoing(st);
     renderLocal(st);
     // 冲突只提示不自动合并
     maybeConflict(st);
@@ -575,6 +620,55 @@ $('btn-pull').onclick = async () => {
   void syncAll();
 };
 
+// 推送 = 原生 git push（默认 origin/当前分支）；先 fetch，有落后就拦下让用户先下载
+($('btn-push') as unknown as HTMLButtonElement).onclick = async () => {
+  if (!dir) return;
+  const btn = $('btn-push') as unknown as HTMLButtonElement;
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const oldLabel = btn.textContent;
+  btn.innerHTML = '<span class="spin">↻</span> 推送中…';
+  try {
+    // 先 fetch 再看状态，保证落后判断是新鲜的
+    await call('POST', '/fetch', { dir }).catch(() => undefined);
+    const chk = await call('GET', `/status?dir=${encodeURIComponent(dir)}`);
+    const st = JSON.parse(chk.body) as StatusAnswer;
+    if (!st.ok) { outEl.textContent = '状态获取失败，稍后重试'; return; }
+    // 落后拦下：跟提交按钮同策略，避免覆盖远程
+    if ((st.behind ?? 0) > 0) {
+      syncEl.textContent = `远程有 ${st.behind} 个新提交，先点下载再推送`;
+      syncEl.style.color = C.amber;
+      outEl.textContent = `远程有 ${st.behind} 个新提交，先点下载合并后再推送`;
+      renderRemote(st);
+      renderOutgoing(st);
+      return;
+    }
+    // 无超前就不用推
+    if ((st.ahead ?? 0) <= 0) {
+      syncEl.textContent = '已是最新，无需推送';
+      syncEl.style.color = C.green;
+      outEl.textContent = '本地与远程一致，无需推送';
+      return;
+    }
+    syncEl.textContent = `推送中…（超前 ${st.ahead}）`;
+    const r = await call('POST', '/push', { dir });
+    const j = JSON.parse(r.body) as { ok: boolean; output?: string; error?: string };
+    if (!j.ok) {
+      outEl.textContent = friendlyErr(j.output || j.error || '推送失败');
+      syncEl.textContent = '推送失败，看下方提示';
+      syncEl.style.color = C.amber;
+      return;
+    }
+    outEl.textContent = '已推送';
+  } catch {
+    outEl.textContent = '推送失败';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldLabel;
+    void syncAll();
+  }
+};
+
 // 切分支 = 下拉选中直接 checkout
 branchSel.onchange = async () => {
   if (!dir || !branchSel.value) return;
@@ -614,6 +708,7 @@ btnCommit.onclick = async () => {
       outEl.textContent = `远程有 ${behind} 个新提交，先点下载合并后再提交`;
       syncEl.textContent = `远程有 ${behind} 个新提交可下载`;
       renderRemote(st);
+      renderOutgoing(st);
       return;
     }
     outEl.textContent = '提交…';
@@ -629,6 +724,7 @@ btnCommit.onclick = async () => {
     if (ahead > 0) {
       outEl.textContent = `已提交但远程核验本地仍超前 ${ahead}推送可能没完全成功请检查`;
       renderRemote(vs);
+      renderOutgoing(vs);
       return;
     }
     msgEl.value = '';

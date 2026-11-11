@@ -26,6 +26,7 @@ export type StatusAnswer = {
   files?: FileEntry[];
   recent?: RecentCommit[];
   incoming?: RecentCommit[];
+  outgoing?: RecentCommit[];
   remoteLog?: RecentCommit[];
   error?: string;
 };
