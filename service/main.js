@@ -462,6 +462,43 @@ var server = http.createServer((req, res) => {
         const r = await runGit(dir, ["pull"]);
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 3000) });
       }
+      if (url.pathname === "/sync") {
+        const count = async (range) => {
+          const r = await runGit(dir, ["rev-list", "--count", range]);
+          return r.code === 0 ? Number(r.stdout.trim() || 0) : 0;
+        };
+        const fail = (error, extra = {}) => json(res, 200, { ok: false, error: error.slice(0, 600), pulled: 0, pushed: 0, ...extra });
+        const up = await runGit(dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+        if (up.code !== 0)
+          return fail("no-upstream");
+        const f = await runGit(dir, ["fetch", "--prune"]);
+        if (f.code !== 0)
+          return fail(`fetch: ${(f.stderr || f.stdout).trim()}`);
+        const behind = await count("HEAD..@{u}");
+        const aheadLocal = await count("@{u}..HEAD");
+        if (behind > 0 && aheadLocal > 0) {
+          return fail("diverged", { ahead: aheadLocal, behind });
+        }
+        let pulled = 0;
+        if (behind > 0) {
+          const p = await runGit(dir, ["pull", "--ff-only"]);
+          if (p.code !== 0) {
+            const out = (p.stdout + p.stderr).trim();
+            return fail(out || "pull-failed", { conflict: /CONFLICT|fix conflicts|Merge conflict/i.test(out) });
+          }
+          pulled = behind;
+        }
+        const ahead = aheadLocal;
+        let pushed = 0;
+        if (ahead > 0) {
+          const ps = await runGit(dir, ["push"]);
+          if (ps.code !== 0)
+            return fail(`push: ${(ps.stderr || ps.stdout).trim()}`, { pulled });
+          pushed = ahead;
+        }
+        const br = await runGit(dir, ["branch", "--show-current"]);
+        return json(res, 200, { ok: true, pulled, pushed, branch: br.stdout.trim() });
+      }
       if (url.pathname === "/push") {
         const remote = body.remote;
         const branch = body.branch;

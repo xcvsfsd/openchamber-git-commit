@@ -1,6 +1,6 @@
 {
   "name": "openchamber-git-commit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JetBrains式Git提交增强：pull/切分支/暂存/提交推送，全走git原生命令",
   "private": true,
   "type": "module",

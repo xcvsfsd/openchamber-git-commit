@@ -17,6 +17,7 @@ Git commit panel for OpenChamber in the style of JetBrains: branches, pull/push,
 - 提交前自动查远程（有更新就拦下），提交后 fetch 核验一致才算成功
 - AI 提交信息：只按勾选文件（含 diff），风格跟随本分支近期提交；空信息点提交自动生成后直接提交
 - Work Status 区显示 `项目名 分支 改动数`，点击打开面板；`/commit` 命令可用
+- Work Status 区右侧「刷新同步」一键完成 `fetch → 拉取 → 推送`，结果行提示「拉取 N 条 / 推送 M 条」；按钮后方常驻未推送条数角标（8 秒自动刷新）
 
 ## 安装
 

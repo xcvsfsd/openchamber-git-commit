@@ -470,6 +470,49 @@ const server = http.createServer((req, res) => {
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 3000) });
       }
 
+      // 刷新同步：fetch → 拉取远程 → 有本地未推送就推送，回计数供状态行提示
+      if (url.pathname === '/sync') {
+        const count = async (range: string): Promise<number> => {
+          const r = await runGit(dir, ['rev-list', '--count', range]);
+          return r.code === 0 ? Number(r.stdout.trim() || 0) : 0;
+        };
+        const fail = (error: string, extra: Record<string, unknown> = {}) =>
+          json(res, 200, { ok: false, error: error.slice(0, 600), pulled: 0, pushed: 0, ...extra });
+
+        const up = await runGit(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+        if (up.code !== 0) return fail('no-upstream');
+
+        const f = await runGit(dir, ['fetch', '--prune']);
+        if (f.code !== 0) return fail(`fetch: ${(f.stderr || f.stdout).trim()}`);
+
+        const behind = await count('HEAD..@{u}');
+        const aheadLocal = await count('@{u}..HEAD');
+        // 分叉时不动工作区：合并会产生冲突文件，交给用户决定
+        if (behind > 0 && aheadLocal > 0) {
+          return fail('diverged', { ahead: aheadLocal, behind });
+        }
+        let pulled = 0;
+        if (behind > 0) {
+          const p = await runGit(dir, ['pull', '--ff-only']);
+          if (p.code !== 0) {
+            const out = (p.stdout + p.stderr).trim();
+            return fail(out || 'pull-failed', { conflict: /CONFLICT|fix conflicts|Merge conflict/i.test(out) });
+          }
+          pulled = behind;
+        }
+
+        // 快进后本地提交不变，aheadLocal 仍准确
+        const ahead = aheadLocal;
+        let pushed = 0;
+        if (ahead > 0) {
+          const ps = await runGit(dir, ['push']);
+          if (ps.code !== 0) return fail(`push: ${(ps.stderr || ps.stdout).trim()}`, { pulled });
+          pushed = ahead;
+        }
+        const br = await runGit(dir, ['branch', '--show-current']);
+        return json(res, 200, { ok: true, pulled, pushed, branch: br.stdout.trim() });
+      }
+
       // 推送：原生 git push，可选 --set-upstream
       if (url.pathname === '/push') {
         const remote = body.remote;
