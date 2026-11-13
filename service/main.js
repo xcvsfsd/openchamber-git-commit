@@ -151,6 +151,15 @@ var siblingRepos = (base) => {
   return repos.slice(0, 100);
 };
 var pullJobs = new Map;
+var isGitHubRepo = (dir) => new Promise((resolve) => {
+  execFile("git", ["-c", "core.quotepath=false", "config", "--get-regexp", "^remote\\..*\\.url$"], { cwd: dir, timeout: 1e4, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+    if (err) {
+      resolve(false);
+      return;
+    }
+    resolve(/github\.com/i.test(String(stdout ?? "")));
+  });
+});
 var server = http.createServer((req, res) => {
   if (req.headers.authorization !== `Bearer ${token}`) {
     json(res, 401, { ok: false, error: "unauthorized" });
@@ -441,6 +450,18 @@ var server = http.createServer((req, res) => {
         }
         (async () => {
           for (const repo of repos) {
+            if (await isGitHubRepo(repo.path)) {
+              job.results.push({
+                name: repo.name,
+                path: repo.path,
+                ok: true,
+                conflict: false,
+                skipped: true,
+                output: "跳过 GitHub 项目"
+              });
+              job.finished += 1;
+              continue;
+            }
             const r = await runGit(repo.path, ["pull"]);
             const output = (r.stdout + r.stderr).slice(0, 800);
             job.results.push({

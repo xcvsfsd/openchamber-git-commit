@@ -1,6 +1,6 @@
 {
   "name": "openchamber-git-commit",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "JetBrains式Git提交增强：pull/切分支/暂存/提交推送，全走git原生命令",
   "private": true,
   "type": "module",
@@ -14,20 +14,13 @@
       "panel": {
         "id": "git-commit",
         "name": "Git 提交",
-        "icon": "git-commit",
-        "entry": "panel/index.html"
+        "icon": "git-commit"
       },
       "statusSection": {
         "entry": "status/index.html",
         "title": "Git",
         "height": 76
       },
-      "commands": [
-        {
-          "name": "commit",
-          "description": "生成提交信息并挂到输入框"
-        }
-      ],
       "capabilities": [
         "model"
       ],

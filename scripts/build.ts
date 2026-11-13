@@ -4,7 +4,6 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const targets = [
-  { entry: 'src/panel/main.ts', out: 'panel/main.js', node: false },
   { entry: 'src/status/main.ts', out: 'status/main.js', node: false },
   { entry: 'src/service/main.ts', out: 'service/main.js', node: true },
 ];

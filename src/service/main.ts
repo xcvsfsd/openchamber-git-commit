@@ -151,9 +151,18 @@ const siblingRepos = (base: string): { name: string; path: string }[] => {
   return repos.slice(0, 100);
 };
 
-type PullResult = { name: string; path: string; ok: boolean; conflict: boolean; output: string };
+type PullResult = { name: string; path: string; ok: boolean; conflict: boolean; skipped?: boolean; output: string };
 type PullJob = { total: number; finished: number; done: boolean; startedAt: number; results: PullResult[] };
 const pullJobs = new Map<string, PullJob>();
+
+// 「全部本地项目拉取」跳过 GitHub 托管的仓：只看远端地址主机名，不联网
+const isGitHubRepo = (dir: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    execFile('git', ['-c', 'core.quotepath=false', 'config', '--get-regexp', '^remote\\..*\\.url$'], { cwd: dir, timeout: 10_000, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+      if (err) { resolve(false); return; }
+      resolve(/github\.com/i.test(String(stdout ?? '')));
+    });
+  });
 
 const server = http.createServer((req, res) => {
   if (req.headers.authorization !== `Bearer ${token}`) {
@@ -432,7 +441,7 @@ const server = http.createServer((req, res) => {
         return json(res, 200, { ok: r.code === 0, output: (r.stdout + r.stderr).slice(0, 2000) });
       }
 
-      // 全部拉取：后台逐个原生 git pull，立即返回 jobId 面板轮询进度
+      // 全部本地项目拉取：后台逐个原生 git pull（跳过 GitHub 仓），立即返回 jobId 面板轮询进度
       if (url.pathname === '/pull-all') {
         const cur = await runGit(dir, ['rev-parse', '--show-toplevel']);
         const base = cur.code === 0 && cur.stdout.trim() ? cur.stdout.trim() : dir;
@@ -446,6 +455,18 @@ const server = http.createServer((req, res) => {
         }
         (async () => {
           for (const repo of repos) {
+            if (await isGitHubRepo(repo.path)) {
+              job.results.push({
+                name: repo.name,
+                path: repo.path,
+                ok: true,
+                conflict: false,
+                skipped: true,
+                output: '跳过 GitHub 项目',
+              });
+              job.finished += 1;
+              continue;
+            }
             const r = await runGit(repo.path, ['pull']);
             const output = (r.stdout + r.stderr).slice(0, 800);
             job.results.push({
