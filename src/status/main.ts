@@ -29,7 +29,7 @@ button:disabled{opacity:.5}
 button[hidden]{display:none}
 .badge{font-size:11px;font-weight:700;line-height:16px;padding:0 5px;border-radius:999px;background:#f59e0b;color:#1c1c1e;flex:none}
 .badge[hidden]{display:none}
-.res{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;opacity:.75}
+.res{white-space:normal;word-break:break-all;font-size:11px;opacity:.75}
 .res.bad{color:#f87171;opacity:1}
 .res[hidden]{display:none}
 </style>
@@ -59,6 +59,7 @@ const errText = (e: string): string => {
 
 const say = (text: string, bad = false): void => {
   resEl.textContent = text;
+  resEl.title = text;
   resEl.classList.toggle('bad', bad);
   resEl.hidden = !text;
   void fitHeight();
