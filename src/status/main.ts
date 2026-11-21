@@ -1,5 +1,5 @@
-// Work Status 区：一行显示仓库/分支，一行显示改动数与上下游；点第一行打开 OpenChamber 自带 git 面板。
-// 「全部本地项目拉取」做成宿主渲染的标题栏控件（与自带的用量等分区一致），不支持时退回区内按钮。
+// 纯状态区：标题栏放数字摘要与刷新，内容区放项目/分支与全部本地项目拉取。
+// 点项目行或数字摘要打开 OpenChamber 自带的 git 面板；本扩展不再自带面板页。
 import { connectHost } from '@openchamber/sdk';
 import { applyHostReady } from '@openchamber/sdk/ui';
 import type { StatusAnswer } from '../shared/types.ts';

@@ -1,7 +1,7 @@
 {
   "name": "openchamber-git-commit",
-  "version": "0.2.0",
-  "description": "JetBrains式Git提交增强：pull/切分支/暂存/提交推送，全走git原生命令",
+  "version": "0.3.0",
+  "description": "Git 状态区：数字摘要+一键同步+全部本地项目拉取，全走 git 原生命令",
   "private": true,
   "type": "module",
   "license": "MIT",

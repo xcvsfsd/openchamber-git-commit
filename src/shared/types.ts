@@ -1,19 +1,10 @@
-// 共享类型：panel / status / service 三端共用，保持轻量可 JSON 序列化。
+// 共享类型：status / service 共用，保持轻量可 JSON 序列化。
+// 瘦身说明：纯状态区只用 branch/ahead/behind/files 长度；面板时代的
+// recent/incoming/outgoing/remoteLog、BranchEntry 已删除，不再查询。
 export type FileEntry = {
   path: string;
   staged: string;
   unstaged: string;
-  add?: number;
-  del?: number;
-  binary?: boolean;
-};
-
-export type RecentCommit = {
-  sha: string;
-  subject: string;
-  author: string;
-  date: string;
-  downloaded?: boolean;
 };
 
 export type StatusAnswer = {
@@ -24,17 +15,5 @@ export type StatusAnswer = {
   ahead?: number;
   behind?: number;
   files?: FileEntry[];
-  recent?: RecentCommit[];
-  incoming?: RecentCommit[];
-  outgoing?: RecentCommit[];
-  remoteLog?: RecentCommit[];
   error?: string;
-};
-
-export type BranchEntry = {
-  name: string;
-  current: boolean;
-  upstream?: string | null;
-  ahead?: number;
-  behind?: number;
 };
